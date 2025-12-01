@@ -37,11 +37,8 @@ def make_qr_bytes(data):
     return buf.getvalue(), img
 
 def rows_to_df(rows, columns):
-    """
-    Converts a list of rows into a DataFrame.
-    Handles empty or None lists safely.
-    """
-    if rows is None or len(rows) == 0:
+    """Converts a list of rows into a DataFrame safely."""
+    if not rows:
         return pd.DataFrame(columns=columns)
     safe_rows = []
     for r in rows:
@@ -247,7 +244,7 @@ with tab3:
         story.append(tbl)
         story.append(Spacer(1,10))
 
-        # Job Details
+        # Job Details Table
         job_data = [["Job No", job_no],["Date", job_date],["Dispatch Location", dispatch_location]]
         tbl = Table(job_data, colWidths=[120,300])
         tbl.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),
