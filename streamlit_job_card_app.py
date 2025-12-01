@@ -16,12 +16,9 @@ PRIMARY_COLOR = "#0d6efd"
 # -----------------------------
 # Initialize session state safely
 # -----------------------------
-if 'items' not in st.session_state or st.session_state.items is None:
-    st.session_state.items = []
-if 'materials' not in st.session_state or st.session_state.materials is None:
-    st.session_state.materials = []
-if 'grn_entries' not in st.session_state or st.session_state.grn_entries is None:
-    st.session_state.grn_entries = []
+for key in ['items', 'materials', 'grn_entries']:
+    if key not in st.session_state or st.session_state[key] is None:
+        st.session_state[key] = []
 
 # -----------------------------
 # Helper functions
@@ -37,18 +34,24 @@ def make_qr_bytes(data):
     return buf.getvalue(), img
 
 def rows_to_df(rows, columns):
-    """Converts a list of rows into a DataFrame safely."""
-    if not rows:
+    """
+    Converts a list of rows into a DataFrame safely.
+    Handles None, empty, or malformed rows.
+    """
+    if not isinstance(rows, list) or len(rows) == 0:
         return pd.DataFrame(columns=columns)
+    
     safe_rows = []
     for r in rows:
-        if r is None:
+        # Ensure each row is a list
+        if not isinstance(r, list):
             r = [""] * len(columns)
         elif len(r) < len(columns):
             r = r + [""] * (len(columns) - len(r))
         elif len(r) > len(columns):
             r = r[:len(columns)]
         safe_rows.append(r)
+    
     return pd.DataFrame(safe_rows, columns=columns)
 
 def add_page_number(canvas, doc):
@@ -222,7 +225,6 @@ with tab3:
         styles = getSampleStyleSheet()
         story = []
 
-        # Header/Footer
         def header_footer(canvas, doc):
             if logo_file:
                 logo = Image.open(logo_file)
@@ -313,3 +315,4 @@ with tab3:
         doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
         buf.seek(0)
         st.download_button("⬇️ Download Multi-Page Job Card PDF", buf, "vendor_job_card.pdf", mime="application/pdf")
+
