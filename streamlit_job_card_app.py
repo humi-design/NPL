@@ -83,7 +83,7 @@ for i, row in enumerate(st.session_state.item_rows):
     row["uom"] = col6.text_input("UOM", row["uom"], key=f"uom_{i}")
     if st.button(f"Delete Item {i+1}"):
         st.session_state.item_rows.pop(i)
-        st.experimental_rerun()
+        # st.experimental_rerun()  # Removed to prevent Streamlit Cloud AttributeError
 
 # If no dynamic items, show an editable table fallback
 if not st.session_state.item_rows:
@@ -120,7 +120,7 @@ for j, row in enumerate(st.session_state.mat_rows):
     row["remark"] = col6.text_input("Remark", row["remark"], key=f"mat_remark_{j}")
     if st.button(f"Delete Material {j+1}"):
         st.session_state.mat_rows.pop(j)
-        st.experimental_rerun()
+        # st.experimental_rerun()  # Removed to prevent Streamlit Cloud AttributeError
 
 # If no dynamic materials, show editable table fallback
 if not st.session_state.mat_rows:
@@ -202,7 +202,7 @@ for k, row in enumerate(st.session_state.grn_rows):
     row["qc_by"] = col6.text_input("QC Approved By", row["qc_by"], key=f"grn_qc_{k}")
     if st.button(f"Delete GRN {k+1}"):
         st.session_state.grn_rows.pop(k)
-        st.experimental_rerun()
+        # st.experimental_rerun()  # Removed to prevent Streamlit Cloud AttributeError
 
 if not st.session_state.grn_rows:
     grv_table = st.data_editor(pd.DataFrame({
