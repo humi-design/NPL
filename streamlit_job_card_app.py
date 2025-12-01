@@ -223,8 +223,9 @@ with tab2:
         # Convert QR code to base64
         qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
 
-        # Use inside your preview HTML
-        html += f"""<h3>QR Code</h3><img src='data:image/png;base64,{qr_b64}' width='150'>"""
+       html += "<h3>QR Code</h3>"
+html += f"<img src='data:image/png;base64,{qr_b64}' width='150'>"
+
         <hr>
 
         <!-- ITEM DETAILS -->
