@@ -173,185 +173,187 @@ with tab1:
 # -----------------------------
 # TAB 2: Preview
 # -----------------------------
+# -----------------------------------------------------
+# TAB 2: Preview  (HTML-based, PDF friendly)
+# -----------------------------------------------------
 with tab2:
+
     st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Preview Job Card</h1>", unsafe_allow_html=True)
-    col_logo, col_header = st.columns([1,5])
-    with col_logo: 
-        if logo_file: st.image(logo_file, width=80)
-    with col_header: st.markdown(f"**{company_name}**\n\n{company_address}")
-    st.markdown("---")
-    st.subheader("Vendor Details")
-    st.markdown(f"""
-    **Vendor ID:** {vendor_id}  
-    **Company:** {vendor_company}  
-    **Contact Person:** {vendor_person}  
-    **Mobile:** {vendor_mobile}  
-    **GST:** {vendor_gst}  
-    **Address:** {vendor_address}
-    """)
-    st.markdown("---")
-    st.subheader("Job Details")
-    st.markdown(f"**Job No:** {job_no}  \n**Date:** {job_date}  \n**Dispatch Location:** {dispatch_location}")
-    st.image(qr_bytes, width=150, caption="QR Code")
-    st.subheader("Item Details")
-    st.dataframe(rows_to_df(st.session_state['items'], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"]), use_container_width=True)
-    st.subheader("Material Issued")
-    st.dataframe(rows_to_df(st.session_state['materials'], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"]), use_container_width=True)
-    st.subheader("Operations")
-    st.write(', '.join([op for op, sel in op_selected.items() if sel]) or "None")
-    if show_machine and machine_details:
-        st.subheader("Machine Details")
-        for k,v in machine_details.items(): st.write(f"**{k}:** {v}")
-    st.subheader("Quality Instructions")
-    st.write(f"Tolerance: {tolerance}")
-    st.write(f"Surface Finish: {surface_finish}")
-    st.write(f"Hardness: {hardness}")
-    if thread_check: st.write("Thread: GO/NO-GO Required")
-    st.subheader("Goods Received / QC")
-    st.dataframe(rows_to_df(st.session_state['grn_entries'], ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"]), use_container_width=True)
 
-    # ✅ PDF download button for printing
-    from io import BytesIO
-    if st.button("Generate PDF for Printing"):
-        buf = BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=40, bottomMargin=30)
-        styles = getSampleStyleSheet()
-        story = []
+    # Build HTML string for preview + PDF export
+    html = f"""
+    <div style='font-family:Arial; padding:20px; border:2px solid #ccc; border-radius:10px; background:#f8f9fb;'>
 
-        # Header
-        if logo_file:
-            logo = Image.open(logo_file)
-            logo.thumbnail((50,50))
-            buf_logo = BytesIO()
-            logo.save(buf_logo, format='PNG')
-            buf_logo.seek(0)
-            story.append(RLImage(buf_logo, width=50, height=50))
-        story.append(Paragraph(f"{company_name}", styles['Title']))
-        story.append(Paragraph(f"{company_address}", styles['Normal']))
-        story.append(Spacer(1,12))
+        <!-- HEADER -->
+        <div style='display:flex; align-items:center; gap:20px;'>
+            <div style='width:100px;'>
+                {"<img src='data:image/png;base64," + base64.b64encode(logo_file.read()).decode() + "' style='width:100px;'/>" if logo_file else ""}
+            </div>
+            <div style='font-size:18px; font-weight:bold;'>
+                {company_name}<br>
+                <span style='font-size:14px; font-weight:normal;'>{company_address}</span>
+            </div>
+        </div>
 
-        # Vendor Table
-        vendor_data = [["Vendor ID", vendor_id],["Company", vendor_company],["Contact", vendor_person],
-                       ["Mobile", vendor_mobile],["GST", vendor_gst],["Address", vendor_address]]
-        tbl = Table(vendor_data, colWidths=[120, 300])
-        tbl.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),
-                                 ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#dbe5f1"))]))
-        story.append(tbl)
-        story.append(Spacer(1,12))
+        <hr>
 
-        # Items Table
-        items_df = rows_to_df(st.session_state['items'], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"])
-        if not items_df.empty:
-            data = [items_df.columns.tolist()] + items_df.fillna("").values.tolist()
-            tbl = Table(data, colWidths=[120,80,80,60,40,40])
-            tbl.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black)]))
-            story.append(tbl)
+        <!-- VENDOR DETAILS -->
+        <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Vendor Details</h2>
+        <table style='width:100%; border-collapse: collapse;'>
+            <tr><td><b>Vendor ID</b></td><td>{vendor_id}</td></tr>
+            <tr><td><b>Company</b></td><td>{vendor_company}</td></tr>
+            <tr><td><b>Contact Person</b></td><td>{vendor_person}</td></tr>
+            <tr><td><b>Mobile</b></td><td>{vendor_mobile}</td></tr>
+            <tr><td><b>GST</b></td><td>{vendor_gst}</td></tr>
+            <tr><td><b>Address</b></td><td>{vendor_address}</td></tr>
+        </table>
 
-        # Materials Table
-        mat_df = rows_to_df(st.session_state['materials'], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"])
-        if not mat_df.empty:
-            data = [mat_df.columns.tolist()] + mat_df.fillna("").values.tolist()
-            tbl = Table(data, colWidths=[100,60,50,50,40,60])
-            tbl.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black)]))
-            story.append(tbl)
+        <hr>
 
-        doc.build(story)
-        buf.seek(0)
-        st.download_button("⬇️ Download PDF to Print", buf, "job_card.pdf", mime="application/pdf")
+        <!-- JOB DETAILS -->
+        <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Job Details</h2>
+        <table style='width:100%; border-collapse: collapse;'>
+            <tr><td><b>Job No</b></td><td>{job_no}</td></tr>
+            <tr><td><b>Date</b></td><td>{job_date}</td></tr>
+            <tr><td><b>Dispatch Location</b></td><td>{dispatch_location}</td></tr>
+        </table>
+
+        <br>
+        <img src='data:image/png;base64,{base64.b64encode(qr_bytes).decode()}' width='150'>
+
+        <hr>
+
+        <!-- ITEM DETAILS -->
+        <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Item Details</h2>
+        <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
+            <tr style='background:#d9e3f0;'>
+                <th>Description</th><th>Drawing No</th><th>Drawing Link</th>
+                <th>Grade</th><th>Qty</th><th>UOM</th>
+            </tr>
+            {
+                "".join([
+                    f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td></tr>"
+                    for r in st.session_state['items']
+                ])
+            }
+        </table>
+
+        <hr>
+
+        <!-- MATERIAL ISSUED -->
+        <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Material Issued</h2>
+        <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
+            <tr style='background:#d9e3f0;'>
+                <th>Raw Material</th><th>Heat No</th><th>Dia/Size</th>
+                <th>Weight</th><th>Qty</th><th>Remark</th>
+            </tr>
+            {
+                "".join([
+                    f"<tr><td>{m[0]}</td><td>{m[1]}</td><td>{m[2]}</td><td>{m[3]}</td><td>{m[4]}</td><td>{m[5]}</td></tr>"
+                    for m in st.session_state['materials']
+                ])
+            }
+        </table>
+
+        <hr>
+
+        <!-- OPERATIONS -->
+        <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Operations</h2>
+        <p>{", ".join([op for op, sel in op_selected.items() if sel]) or "None"}</p>
+
+        {"<h2 style='color:"+PRIMARY_COLOR+";'>Machine Details</h2>" if show_machine else ""}
+        {
+            "".join([f"<p><b>{k}:</b> {v}</p>" for k,v in machine_details.items()]) 
+            if show_machine else ""
+        }
+
+        <hr>
+
+        <!-- QUALITY -->
+        <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Quality Instructions</h2>
+        <p><b>Tolerance:</b> {tolerance}</p>
+        <p><b>Surface Finish:</b> {surface_finish}</p>
+        <p><b>Hardness:</b> {hardness}</p>
+        {"<p><b>Thread:</b> GO/NO-GO Required</p>" if thread_check else ""}
+
+        <hr>
+
+        <!-- GOODS RECEIVED -->
+        <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Goods Received / QC</h2>
+        <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
+            <tr style='background:#d9e3f0;'>
+                <th>Date</th><th>Qty Received</th><th>OK Qty</th>
+                <th>Rejected Qty</th><th>Remarks</th><th>QC Approved By</th>
+            </tr>
+            {
+                "".join([
+                    f"<tr><td>{g[0]}</td><td>{g[1]}</td><td>{g[2]}</td><td>{g[3]}</td><td>{g[4]}</td><td>{g[5]}</td></tr>"
+                    for g in st.session_state['grn_entries']
+                ])
+            }
+        </table>
+
+    </div>
+    """
+
+    # Display Preview
+    st.markdown(html, unsafe_allow_html=True)
+
+    # Save HTML for PDF generation in tab3
+    st.session_state["preview_html"] = html
 
 # -----------------------------
 # TAB 3: PDF Export (HTML-to-PDF)
 # -----------------------------
-import base64
-import pdfkit
-
+# -----------------------------------------------------
+# TAB 3: PDF EXPORT (WeasyPrint)
+# -----------------------------------------------------
 with tab3:
-    st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Export Professional Job Card PDF</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Download PDF</h1>", unsafe_allow_html=True)
 
-    # Render Preview tab HTML as a string
-    def generate_preview_html():
-        # Convert QR code to base64
-        qr_buf = BytesIO()
-        qr_img.save(qr_buf, format="PNG")
-        qr_base64 = base64.b64encode(qr_buf.getvalue()).decode()
+    if "preview_html" not in st.session_state:
+        st.warning("Please fill the form and open the Preview tab first.")
+    else:
+        html = st.session_state["preview_html"]
 
-        # Items table HTML
-        items_df = rows_to_df(st.session_state['items'], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"])
-        items_html = items_df.to_html(index=False, border=1, justify="center")
-
-        # Materials table HTML
-        mat_df = rows_to_df(st.session_state['materials'], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"])
-        mat_html = mat_df.to_html(index=False, border=1, justify="center")
-
-        # GRN table HTML
-        grn_df = rows_to_df(st.session_state['grn_entries'], ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"])
-        grn_html = grn_df.to_html(index=False, border=1, justify="center")
-
-        # Operations selected
-        ops_html = ', '.join([op for op, sel in op_selected.items() if sel]) or "None"
-
-        # Machine details HTML
-        machine_html = ""
-        if show_machine and machine_details:
-            machine_html += "<ul>"
-            for k,v in machine_details.items():
-                machine_html += f"<li><b>{k}:</b> {v}</li>"
-            machine_html += "</ul>"
-
-        # Thread check
-        thread_html = "Thread: GO/NO-GO Required" if thread_check else ""
-
-        html_content = f"""
+        # Add global print styles for PDF
+        styled_html = f"""
         <html>
         <head>
-        <meta charset="UTF-8">
         <style>
-            body {{ font-family: Arial, sans-serif; }}
-            h1 {{ color: {PRIMARY_COLOR}; }}
-            table {{ border-collapse: collapse; width: 100%; margin-bottom: 15px; }}
-            th, td {{ border: 1px solid black; padding: 5px; text-align: center; }}
-            th {{ background-color: #dbe5f1; }}
-            ul {{ list-style-type: none; padding-left: 0; }}
+            @page {{
+                size: A4;
+                margin: 20mm;
+            }}
+            body {{
+                font-family: Arial, sans-serif;
+                font-size: 13px;
+            }}
+            table, th, td {{
+                border: 1px solid #000;
+                border-collapse: collapse;
+                padding: 6px;
+            }}
+            th {{
+                background: #d9e3f0;
+            }}
         </style>
         </head>
         <body>
-            <h1>{company_name}</h1>
-            <p>{company_address}</p>
-            <h2>Vendor Details</h2>
-            <p>
-            Vendor ID: {vendor_id}<br>
-            Company: {vendor_company}<br>
-            Contact Person: {vendor_person}<br>
-            Mobile: {vendor_mobile}<br>
-            GST: {vendor_gst}<br>
-            Address: {vendor_address}
-            </p>
-            <h2>Job Details</h2>
-            <p>Job No: {job_no}<br>Date: {job_date}<br>Dispatch Location: {dispatch_location}</p>
-            <img src="data:image/png;base64,{qr_base64}" width="150" height="150" />
-            <h2>Item Details</h2>
-            {items_html}
-            <h2>Material Issued</h2>
-            {mat_html}
-            <h2>Operations</h2>
-            <p>{ops_html}</p>
-            <h2>Machine Details</h2>
-            {machine_html}
-            <h2>Quality Instructions</h2>
-            <p>Tolerance: {tolerance}<br>
-            Surface Finish: {surface_finish}<br>
-            Hardness: {hardness}<br>
-            {thread_html}
-            </p>
-            <h2>Goods Received / QC</h2>
-            {grn_html}
+            {html}
         </body>
         </html>
         """
-        return html_content
 
-    if st.button("⬇️ Download PDF (Exact Preview)"):
-        html = generate_preview_html()
-        pdf_bytes = pdfkit.from_string(html, False)
-        st.download_button("Download Job Card PDF", pdf_bytes, "job_card.pdf", mime="application/pdf")
+        if st.button("Generate PDF"):
+            from weasyprint import HTML
+            pdf_bytes = HTML(string=styled_html).write_pdf()
 
+            st.success("PDF generated successfully!")
+
+            st.download_button(
+                label="⬇️ Download Job Card PDF",
+                data=pdf_bytes,
+                file_name=f"JobCard_{job_no}.pdf",
+                mime="application/pdf"
+            )
