@@ -6,3 +6,4 @@ qrcode
 reportlab
 openpyxl
 python-barcode
+pdfkit
