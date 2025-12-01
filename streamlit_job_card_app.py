@@ -220,10 +220,12 @@ with tab2:
         </table>
 
         <br>
-        # Convert QR code to base64
-        qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
+       # Convert QR bytes to base64 for HTML preview + PDF export
+qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
 
-       html += "<h3>QR Code</h3>"
+# Add to preview HTML string
+html = ""
+html += "<h3>QR Code</h3>"
 html += f"<img src='data:image/png;base64,{qr_b64}' width='150'>"
 
         <hr>
