@@ -1,3 +1,4 @@
+import base64
 import streamlit as st
 import pandas as pd
 import qrcode
@@ -219,8 +220,11 @@ with tab2:
         </table>
 
         <br>
-        <img src='data:image/png;base64,{base64.b64encode(qr_bytes).decode()}' width='150'>
+        # Convert QR code to base64
+        qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
 
+        # Use inside your preview HTML
+        html += f"""<h3>QR Code</h3><img src='data:image/png;base64,{qr_b64}' width='150'>"""
         <hr>
 
         <!-- ITEM DETAILS -->
