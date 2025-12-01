@@ -14,10 +14,10 @@ st.set_page_config(page_title="Dynamic Vendor Job Card", layout="wide")
 PRIMARY_COLOR = "#0d6efd"
 
 # -----------------------------
-# Initialize session state safely
+# Safe session state initialization
 # -----------------------------
 for key in ['items', 'materials', 'grn_entries']:
-    if key not in st.session_state or st.session_state[key] is None:
+    if key not in st.session_state or not isinstance(st.session_state[key], list):
         st.session_state[key] = []
 
 # -----------------------------
@@ -34,24 +34,17 @@ def make_qr_bytes(data):
     return buf.getvalue(), img
 
 def rows_to_df(rows, columns):
-    """
-    Converts a list of rows into a DataFrame safely.
-    Handles None, empty, or malformed rows.
-    """
-    if not isinstance(rows, list) or len(rows) == 0:
+    if rows is None or not isinstance(rows, list) or len(rows) == 0:
         return pd.DataFrame(columns=columns)
-    
     safe_rows = []
     for r in rows:
-        # Ensure each row is a list
-        if not isinstance(r, list):
+        if r is None:
             r = [""] * len(columns)
         elif len(r) < len(columns):
             r = r + [""] * (len(columns) - len(r))
         elif len(r) > len(columns):
             r = r[:len(columns)]
         safe_rows.append(r)
-    
     return pd.DataFrame(safe_rows, columns=columns)
 
 def add_page_number(canvas, doc):
@@ -168,7 +161,8 @@ with tab1:
     grn_cols = ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"]
     grn_new = st.columns([1,1,1,1,1,1])
     grn_vals = [grn_new[i].text_input(grn_cols[i]) if i==0 else grn_new[i].number_input(grn_cols[i], value=0) for i in range(6)]
-    if st.button("Add GRN Entry"): st.session_state.grn_entries.append(grn_vals)
+    if st.button("Add GRN Entry"):
+        st.session_state.grn_entries.append(grn_vals)
     if st.session_state.grn_entries:
         st.dataframe(rows_to_df(st.session_state.grn_entries, grn_cols), use_container_width=True)
         if st.button("Clear GRN Entries"): st.session_state.grn_entries = []
@@ -225,6 +219,7 @@ with tab3:
         styles = getSampleStyleSheet()
         story = []
 
+        # Header/Footer function
         def header_footer(canvas, doc):
             if logo_file:
                 logo = Image.open(logo_file)
@@ -254,7 +249,7 @@ with tab3:
         story.append(tbl)
         story.append(Spacer(1,6))
 
-        # QR
+        # QR Code
         qr_rl = RLImage(BytesIO(qr_bytes), width=100, height=100)
         story.append(qr_rl)
         story.append(Spacer(1,12))
@@ -287,13 +282,13 @@ with tab3:
         story.append(Paragraph(ops_text, styles['Normal']))
         story.append(Spacer(1,10))
 
-        # Machine
+        # Machine Details
         if show_machine and machine_details:
             story.append(Paragraph("Machine Details", styles['Heading2']))
             for k,v in machine_details.items(): story.append(Paragraph(f"{k}: {v}", styles['Normal']))
             story.append(Spacer(1,10))
 
-        # Quality
+        # Quality Instructions
         story.append(Paragraph("Quality Instructions", styles['Heading2']))
         story.append(Paragraph(f"Tolerance: {tolerance}", styles['Normal']))
         story.append(Paragraph(f"Surface Finish: {surface_finish}", styles['Normal']))
@@ -301,7 +296,7 @@ with tab3:
         if thread_check: story.append(Paragraph("Thread: GO/NO-GO Required", styles['Normal']))
         story.append(Spacer(1,10))
 
-        # GRN
+        # GRN Table
         grn_df = rows_to_df(st.session_state.grn_entries, ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"])
         if not grn_df.empty:
             data = [grn_df.columns.tolist()] + grn_df.fillna("").values.tolist()
@@ -314,5 +309,4 @@ with tab3:
 
         doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
         buf.seek(0)
-        st.download_button("⬇️ Download Multi-Page Job Card PDF", buf, "vendor_job_card.pdf", mime="application/pdf")
-
+        st.download_button("⬇️ Download Job Card PDF", buf, "vendor_job_card.pdf", mime="application/pdf")
