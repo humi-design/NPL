@@ -14,11 +14,14 @@ st.set_page_config(page_title="Dynamic Vendor Job Card", layout="wide")
 PRIMARY_COLOR = "#0d6efd"
 
 # -----------------------------
-# Initialize Session State
+# Initialize session state safely
 # -----------------------------
-if 'items' not in st.session_state: st.session_state.items = []
-if 'materials' not in st.session_state: st.session_state.materials = []
-if 'grn_entries' not in st.session_state: st.session_state.grn_entries = []
+if 'items' not in st.session_state or st.session_state.items is None:
+    st.session_state.items = []
+if 'materials' not in st.session_state or st.session_state.materials is None:
+    st.session_state.materials = []
+if 'grn_entries' not in st.session_state or st.session_state.grn_entries is None:
+    st.session_state.grn_entries = []
 
 # -----------------------------
 # Helper functions
@@ -35,12 +38,20 @@ def make_qr_bytes(data):
 
 def rows_to_df(rows, columns):
     """
-    Convert session_state list of rows into pandas DataFrame.
-    Handles empty or improperly sized rows.
+    Converts a list of rows into a DataFrame.
+    Handles empty or None lists safely.
     """
-    if not rows or len(rows) == 0:
+    if rows is None or len(rows) == 0:
         return pd.DataFrame(columns=columns)
-    safe_rows = [row + [""]*(len(columns)-len(row)) if len(row) < len(columns) else row[:len(columns)] for row in rows]
+    safe_rows = []
+    for r in rows:
+        if r is None:
+            r = [""] * len(columns)
+        elif len(r) < len(columns):
+            r = r + [""] * (len(columns) - len(r))
+        elif len(r) > len(columns):
+            r = r[:len(columns)]
+        safe_rows.append(r)
     return pd.DataFrame(safe_rows, columns=columns)
 
 def add_page_number(canvas, doc):
