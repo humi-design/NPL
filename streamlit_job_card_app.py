@@ -4,9 +4,7 @@ import pandas as pd
 import qrcode
 from io import BytesIO
 from PIL import Image
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
+from reportlab.platypus import Image as RLImage  # only used earlier; left for compatibility
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from datetime import date as dt_date
@@ -51,11 +49,6 @@ def rows_to_df(rows, columns):
         safe_rows.append(r)
     return pd.DataFrame(safe_rows, columns=columns)
 
-def add_page_number(canvas, doc):
-    page_num = canvas.getPageNumber()
-    canvas.setFont('Helvetica', 8)
-    canvas.drawRightString(A4[0]-20*mm, 10*mm, f"Page {page_num}")
-
 # -----------------------------
 # Tabs
 # -----------------------------
@@ -72,6 +65,12 @@ with tab1:
     col_logo, col_name = st.columns([1,5])
     with col_logo:
         logo_file = st.file_uploader("Upload Company Logo", type=["png","jpg","jpeg"])
+        logo_bytes = None
+        logo_b64 = ""
+        if logo_file is not None:
+            # read bytes once and keep for reuse
+            logo_bytes = logo_file.read()
+            logo_b64 = base64.b64encode(logo_bytes).decode("utf-8")
     with col_name:
         company_name = st.text_input("Your Company Name")
         company_address = st.text_area("Your Company Address")
@@ -91,9 +90,12 @@ with tab1:
     # Job Details
     st.subheader("Job Details")
     col1, col2, col3 = st.columns(3)
-    with col1: job_no = st.text_input("Job Card No.", value=f"JC-{dt_date.today().strftime('%Y%m%d')}")
-    with col2: job_date = st.date_input("Date", dt_date.today())
-    with col3: dispatch_location = st.text_input("Dispatch Location")
+    with col1:
+        job_no = st.text_input("Job Card No.", value=f"JC-{dt_date.today().strftime('%Y%m%d')}")
+    with col2:
+        job_date = st.date_input("Date", dt_date.today())
+    with col3:
+        dispatch_location = st.text_input("Dispatch Location")
 
     # QR Code
     qr_text_input = f"JobNo: {job_no} | Date: {job_date} | Dispatch: {dispatch_location} | VendorID: {vendor_id}"
@@ -110,10 +112,13 @@ with tab1:
     qty = new_item[4].number_input("Qty", value=0, min_value=0)
     uom = new_item[5].text_input("UOM", value="Nos")
     if st.button("Add Item"):
+        if 'items' not in st.session_state or not isinstance(st.session_state['items'], list):
+            st.session_state['items'] = []
         st.session_state['items'].append([desc, drawing_no, drawing_link, grade, qty, uom])
     if st.session_state['items']:
         st.dataframe(rows_to_df(st.session_state['items'], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"]), use_container_width=True)
-        if st.button("Clear Items"): st.session_state['items'] = []
+        if st.button("Clear Items"):
+            st.session_state['items'] = []
 
     # Material Issued
     st.subheader("Material Issued")
@@ -125,10 +130,13 @@ with tab1:
     mqty = new_mat[4].number_input("Qty", value=0)
     remark = new_mat[5].text_input("Remark")
     if st.button("Add Material"):
+        if 'materials' not in st.session_state or not isinstance(st.session_state['materials'], list):
+            st.session_state['materials'] = []
         st.session_state['materials'].append([rm, heat, dia, weight, mqty, remark])
     if st.session_state['materials']:
         st.dataframe(rows_to_df(st.session_state['materials'], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"]), use_container_width=True)
-        if st.button("Clear Materials"): st.session_state['materials'] = []
+        if st.button("Clear Materials"):
+            st.session_state['materials'] = []
 
     # Operations
     st.subheader("Operation Checklist")
@@ -166,33 +174,65 @@ with tab1:
     grn_new = st.columns([1,1,1,1,1,1])
     grn_vals = [grn_new[i].text_input(grn_cols[i]) if i==0 else grn_new[i].number_input(grn_cols[i], value=0) for i in range(6)]
     if st.button("Add GRN Entry"):
+        if 'grn_entries' not in st.session_state or not isinstance(st.session_state['grn_entries'], list):
+            st.session_state['grn_entries'] = []
         st.session_state['grn_entries'].append(grn_vals)
     if st.session_state['grn_entries']:
         st.dataframe(rows_to_df(st.session_state['grn_entries'], grn_cols), use_container_width=True)
-        if st.button("Clear GRN Entries"): st.session_state['grn_entries'] = []
+        if st.button("Clear GRN Entries"):
+            st.session_state['grn_entries'] = []
 
 # -----------------------------
-# TAB 2: Preview
+# TAB 2: Preview (HTML-based, PDF friendly)
 # -----------------------------
-# -----------------------------------------------------
-# TAB 2: Preview  (HTML-based, PDF friendly)
-# -----------------------------------------------------
 with tab2:
-
     st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Preview Job Card</h1>", unsafe_allow_html=True)
 
-    # Build HTML string for preview + PDF export
+    # prepare base64 strings for logo and qr
+    logo_img_html = ""
+    if 'logo_b64' in locals() and logo_b64:
+        logo_img_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:100px;'/>"
+    else:
+        # logo_file may exist but we read it earlier; fallback empty
+        logo_img_html = ""
+
+    qr_b64 = base64.b64encode(qr_bytes).decode("utf-8") if 'qr_bytes' in locals() and qr_bytes else ""
+    qr_img_html = f"<img src='data:image/png;base64,{qr_b64}' width='150'/>" if qr_b64 else ""
+
+    # Build the preview HTML safely using placeholders
+    # Use triple-quoted string but without embedding python blocks inside it
+    items_rows_html = ""
+    for r in st.session_state['items']:
+        # ensure each field exists
+        r_safe = [("" if c is None else c) for c in r]
+        items_rows_html += f"<tr><td>{r_safe[0]}</td><td>{r_safe[1]}</td><td>{r_safe[2]}</td><td>{r_safe[3]}</td><td>{r_safe[4]}</td><td>{r_safe[5]}</td></tr>"
+
+    mats_rows_html = ""
+    for m in st.session_state['materials']:
+        m_safe = [("" if c is None else c) for c in m]
+        mats_rows_html += f"<tr><td>{m_safe[0]}</td><td>{m_safe[1]}</td><td>{m_safe[2]}</td><td>{m_safe[3]}</td><td>{m_safe[4]}</td><td>{m_safe[5]}</td></tr>"
+
+    grn_rows_html = ""
+    for g in st.session_state['grn_entries']:
+        g_safe = [("" if c is None else c) for c in g]
+        grn_rows_html += f"<tr><td>{g_safe[0]}</td><td>{g_safe[1]}</td><td>{g_safe[2]}</td><td>{g_safe[3]}</td><td>{g_safe[4]}</td><td>{g_safe[5]}</td></tr>"
+
+    ops_text = ', '.join([op for op, sel in op_selected.items() if sel]) or "None"
+
+    machine_html = ""
+    if show_machine and machine_details:
+        for k, v in machine_details.items():
+            machine_html += f"<p><b>{k}:</b> {v}</p>"
+
     html = f"""
     <div style='font-family:Arial; padding:20px; border:2px solid #ccc; border-radius:10px; background:#f8f9fb;'>
 
         <!-- HEADER -->
         <div style='display:flex; align-items:center; gap:20px;'>
-            <div style='width:100px;'>
-                {"<img src='data:image/png;base64," + base64.b64encode(logo_file.read()).decode() + "' style='width:100px;'/>" if logo_file else ""}
-            </div>
+            <div style='width:100px;'>{logo_img_html}</div>
             <div style='font-size:18px; font-weight:bold;'>
-                {company_name}<br>
-                <span style='font-size:14px; font-weight:normal;'>{company_address}</span>
+                {company_name or ''}
+                <div style='font-size:14px; font-weight:normal;'>{(company_address or '').replace('\n','<br>')}</div>
             </div>
         </div>
 
@@ -201,12 +241,12 @@ with tab2:
         <!-- VENDOR DETAILS -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Vendor Details</h2>
         <table style='width:100%; border-collapse: collapse;'>
-            <tr><td><b>Vendor ID</b></td><td>{vendor_id}</td></tr>
-            <tr><td><b>Company</b></td><td>{vendor_company}</td></tr>
-            <tr><td><b>Contact Person</b></td><td>{vendor_person}</td></tr>
-            <tr><td><b>Mobile</b></td><td>{vendor_mobile}</td></tr>
-            <tr><td><b>GST</b></td><td>{vendor_gst}</td></tr>
-            <tr><td><b>Address</b></td><td>{vendor_address}</td></tr>
+            <tr><td><b>Vendor ID</b></td><td>{vendor_id or ''}</td></tr>
+            <tr><td><b>Company</b></td><td>{vendor_company or ''}</td></tr>
+            <tr><td><b>Contact Person</b></td><td>{vendor_person or ''}</td></tr>
+            <tr><td><b>Mobile</b></td><td>{vendor_mobile or ''}</td></tr>
+            <tr><td><b>GST</b></td><td>{vendor_gst or ''}</td></tr>
+            <tr><td><b>Address</b></td><td>{(vendor_address or '').replace('\n','<br>')}</td></tr>
         </table>
 
         <hr>
@@ -214,20 +254,13 @@ with tab2:
         <!-- JOB DETAILS -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Job Details</h2>
         <table style='width:100%; border-collapse: collapse;'>
-            <tr><td><b>Job No</b></td><td>{job_no}</td></tr>
+            <tr><td><b>Job No</b></td><td>{job_no or ''}</td></tr>
             <tr><td><b>Date</b></td><td>{job_date}</td></tr>
-            <tr><td><b>Dispatch Location</b></td><td>{dispatch_location}</td></tr>
+            <tr><td><b>Dispatch Location</b></td><td>{dispatch_location or ''}</td></tr>
         </table>
 
         <br>
-       # Convert QR bytes to base64 for HTML preview + PDF export
-qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
-
-# Add to preview HTML string
-html = ""
-html += "<h3>QR Code</h3>"
-html += f"<img src='data:image/png;base64,{qr_b64}' width='150'>"
-
+        {qr_img_html}
         <hr>
 
         <!-- ITEM DETAILS -->
@@ -237,12 +270,7 @@ html += f"<img src='data:image/png;base64,{qr_b64}' width='150'>"
                 <th>Description</th><th>Drawing No</th><th>Drawing Link</th>
                 <th>Grade</th><th>Qty</th><th>UOM</th>
             </tr>
-            {
-                "".join([
-                    f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td></tr>"
-                    for r in st.session_state['items']
-                ])
-            }
+            {items_rows_html}
         </table>
 
         <hr>
@@ -254,34 +282,25 @@ html += f"<img src='data:image/png;base64,{qr_b64}' width='150'>"
                 <th>Raw Material</th><th>Heat No</th><th>Dia/Size</th>
                 <th>Weight</th><th>Qty</th><th>Remark</th>
             </tr>
-            {
-                "".join([
-                    f"<tr><td>{m[0]}</td><td>{m[1]}</td><td>{m[2]}</td><td>{m[3]}</td><td>{m[4]}</td><td>{m[5]}</td></tr>"
-                    for m in st.session_state['materials']
-                ])
-            }
+            {mats_rows_html}
         </table>
 
         <hr>
 
         <!-- OPERATIONS -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Operations</h2>
-        <p>{", ".join([op for op, sel in op_selected.items() if sel]) or "None"}</p>
+        <p>{ops_text}</p>
 
-        {"<h2 style='color:"+PRIMARY_COLOR+";'>Machine Details</h2>" if show_machine else ""}
-        {
-            "".join([f"<p><b>{k}:</b> {v}</p>" for k,v in machine_details.items()]) 
-            if show_machine else ""
-        }
+        {machine_html}
 
         <hr>
 
         <!-- QUALITY -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Quality Instructions</h2>
-        <p><b>Tolerance:</b> {tolerance}</p>
-        <p><b>Surface Finish:</b> {surface_finish}</p>
-        <p><b>Hardness:</b> {hardness}</p>
-        {"<p><b>Thread:</b> GO/NO-GO Required</p>" if thread_check else ""}
+        <p><b>Tolerance:</b> {tolerance or ''}</p>
+        <p><b>Surface Finish:</b> {surface_finish or ''}</p>
+        <p><b>Hardness:</b> {hardness or ''}</p>
+        {("<p><b>Thread:</b> GO/NO-GO Required</p>" if thread_check else "")}
 
         <hr>
 
@@ -292,29 +311,21 @@ html += f"<img src='data:image/png;base64,{qr_b64}' width='150'>"
                 <th>Date</th><th>Qty Received</th><th>OK Qty</th>
                 <th>Rejected Qty</th><th>Remarks</th><th>QC Approved By</th>
             </tr>
-            {
-                "".join([
-                    f"<tr><td>{g[0]}</td><td>{g[1]}</td><td>{g[2]}</td><td>{g[3]}</td><td>{g[4]}</td><td>{g[5]}</td></tr>"
-                    for g in st.session_state['grn_entries']
-                ])
-            }
+            {grn_rows_html}
         </table>
 
     </div>
     """
 
-    # Display Preview
+    # Display Preview (HTML)
     st.markdown(html, unsafe_allow_html=True)
 
     # Save HTML for PDF generation in tab3
     st.session_state["preview_html"] = html
 
 # -----------------------------
-# TAB 3: PDF Export (HTML-to-PDF)
-# -----------------------------
-# -----------------------------------------------------
 # TAB 3: PDF EXPORT (WeasyPrint)
-# -----------------------------------------------------
+# -----------------------------
 with tab3:
     st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Download PDF</h1>", unsafe_allow_html=True)
 
@@ -353,14 +364,17 @@ with tab3:
         """
 
         if st.button("Generate PDF"):
-            from weasyprint import HTML
-            pdf_bytes = HTML(string=styled_html).write_pdf()
-
-            st.success("PDF generated successfully!")
-
-            st.download_button(
-                label="⬇️ Download Job Card PDF",
-                data=pdf_bytes,
-                file_name=f"JobCard_{job_no}.pdf",
-                mime="application/pdf"
-            )
+            try:
+                from weasyprint import HTML
+            except Exception as e:
+                st.error("WeasyPrint is not installed or failed to import. Add 'weasyprint' to requirements.txt and ensure dependencies for WeasyPrint are available.")
+                st.write(e)
+            else:
+                pdf_bytes = HTML(string=styled_html).write_pdf()
+                st.success("PDF generated successfully!")
+                st.download_button(
+                    label="⬇️ Download Job Card PDF",
+                    data=pdf_bytes,
+                    file_name=f"JobCard_{job_no}.pdf",
+                    mime="application/pdf"
+                )
