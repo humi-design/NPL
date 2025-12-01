@@ -3,7 +3,7 @@ import pandas as pd
 import qrcode
 from io import BytesIO
 from PIL import Image
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -67,7 +67,7 @@ with tab1:
     st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Vendor Job Card Input</h1>", unsafe_allow_html=True)
 
     # Company Header
-    st.subheader("Company Header (Constant)")
+    st.subheader("Company Header")
     col_logo, col_name = st.columns([1,5])
     with col_logo:
         logo_file = st.file_uploader("Upload Company Logo", type=["png","jpg","jpeg"])
@@ -109,8 +109,6 @@ with tab1:
     qty = new_item[4].number_input("Qty", value=0, min_value=0)
     uom = new_item[5].text_input("UOM", value="Nos")
     if st.button("Add Item"):
-        if 'items' not in st.session_state or not isinstance(st.session_state['items'], list):
-            st.session_state['items'] = []
         st.session_state['items'].append([desc, drawing_no, drawing_link, grade, qty, uom])
     if st.session_state['items']:
         st.dataframe(rows_to_df(st.session_state['items'], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"]), use_container_width=True)
@@ -126,8 +124,6 @@ with tab1:
     mqty = new_mat[4].number_input("Qty", value=0)
     remark = new_mat[5].text_input("Remark")
     if st.button("Add Material"):
-        if 'materials' not in st.session_state or not isinstance(st.session_state['materials'], list):
-            st.session_state['materials'] = []
         st.session_state['materials'].append([rm, heat, dia, weight, mqty, remark])
     if st.session_state['materials']:
         st.dataframe(rows_to_df(st.session_state['materials'], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"]), use_container_width=True)
@@ -169,8 +165,6 @@ with tab1:
     grn_new = st.columns([1,1,1,1,1,1])
     grn_vals = [grn_new[i].text_input(grn_cols[i]) if i==0 else grn_new[i].number_input(grn_cols[i], value=0) for i in range(6)]
     if st.button("Add GRN Entry"):
-        if 'grn_entries' not in st.session_state or not isinstance(st.session_state['grn_entries'], list):
-            st.session_state['grn_entries'] = []
         st.session_state['grn_entries'].append(grn_vals)
     if st.session_state['grn_entries']:
         st.dataframe(rows_to_df(st.session_state['grn_entries'], grn_cols), use_container_width=True)
@@ -215,11 +209,52 @@ with tab2:
     if thread_check: st.write("Thread: GO/NO-GO Required")
     st.subheader("Goods Received / QC")
     st.dataframe(rows_to_df(st.session_state['grn_entries'], ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"]), use_container_width=True)
-    st.markdown(f"<button onclick='window.print()' style='background-color:{PRIMARY_COLOR};color:white;padding:8px 20px;border:none;border-radius:4px;'>🖨️ Print Job Card</button>", unsafe_allow_html=True)
 
-# -----------------------------
-# TAB 3: PDF Export
-# -----------------------------
-with tab3:
-    st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Export Professional Job Card PDF</h1>", unsafe_allow_html=True)
-    # PDF generation code remains same as before
+    # ✅ PDF download button for printing
+    from io import BytesIO
+    if st.button("Generate PDF for Printing"):
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=40, bottomMargin=30)
+        styles = getSampleStyleSheet()
+        story = []
+
+        # Header
+        if logo_file:
+            logo = Image.open(logo_file)
+            logo.thumbnail((50,50))
+            buf_logo = BytesIO()
+            logo.save(buf_logo, format='PNG')
+            buf_logo.seek(0)
+            story.append(RLImage(buf_logo, width=50, height=50))
+        story.append(Paragraph(f"{company_name}", styles['Title']))
+        story.append(Paragraph(f"{company_address}", styles['Normal']))
+        story.append(Spacer(1,12))
+
+        # Vendor Table
+        vendor_data = [["Vendor ID", vendor_id],["Company", vendor_company],["Contact", vendor_person],
+                       ["Mobile", vendor_mobile],["GST", vendor_gst],["Address", vendor_address]]
+        tbl = Table(vendor_data, colWidths=[120, 300])
+        tbl.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),
+                                 ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#dbe5f1"))]))
+        story.append(tbl)
+        story.append(Spacer(1,12))
+
+        # Items Table
+        items_df = rows_to_df(st.session_state['items'], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"])
+        if not items_df.empty:
+            data = [items_df.columns.tolist()] + items_df.fillna("").values.tolist()
+            tbl = Table(data, colWidths=[120,80,80,60,40,40])
+            tbl.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black)]))
+            story.append(tbl)
+
+        # Materials Table
+        mat_df = rows_to_df(st.session_state['materials'], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"])
+        if not mat_df.empty:
+            data = [mat_df.columns.tolist()] + mat_df.fillna("").values.tolist()
+            tbl = Table(data, colWidths=[100,60,50,50,40,60])
+            tbl.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black)]))
+            story.append(tbl)
+
+        doc.build(story)
+        buf.seek(0)
+        st.download_button("⬇️ Download PDF to Print", buf, "job_card.pdf", mime="application/pdf")
