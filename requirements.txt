@@ -7,3 +7,4 @@ reportlab
 openpyxl
 python-barcode
 pdfkit
+weasyprint 
