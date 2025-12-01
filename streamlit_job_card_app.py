@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import pandas as pd
 import qrcode
@@ -16,9 +15,19 @@ from datetime import datetime
 # Page config
 st.set_page_config(page_title="Vendor Job Card", layout="wide")
 
-# Styles / theme colors
+# Theme colors
 PRIMARY_COLOR = "#1e3a8a"  # Blue
 ACCENT_COLOR = "#6b7280"   # Grey
+
+# -------------------------------
+# Initialize session state safely
+# -------------------------------
+if "next_job_no" not in st.session_state:
+    st.session_state.next_job_no = datetime.now().strftime("JC-%Y%m%d-%H%M%S")
+
+for key in ("items", "materials", "grn_entries"):
+    if key not in st.session_state or not isinstance(st.session_state[key], list):
+        st.session_state[key] = []
 
 # -----------------------------------------
 # Helper: QR bytes
@@ -42,17 +51,8 @@ def rows_to_df(rows, columns):
     return pd.DataFrame(rows)
 
 # -----------------------------------------
-# Auto Job No (session)
+# Tabs: Input | Preview | PDF
 # -----------------------------------------
-if "next_job_no" not in st.session_state:
-    st.session_state.next_job_no = datetime.now().strftime("JC-%Y%m%d-%H%M%S")
-
-# Initialize dynamic lists
-for key in ("items", "materials", "grn_entries"):
-    if key not in st.session_state:
-        st.session_state[key] = []
-
-# Layout: Tabs
 tab1, tab2, tab3 = st.tabs(["✍️ Input", "👁️ Preview", "📄 PDF Export"])
 
 # -------------------------
@@ -61,18 +61,18 @@ tab1, tab2, tab3 = st.tabs(["✍️ Input", "👁️ Preview", "📄 PDF Export"
 with tab1:
     st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Vendor Job Card - Input</h1>", unsafe_allow_html=True)
 
-    # HEADER
+    # Header
     col_logo, col_header = st.columns([1, 5])
     with col_logo:
         logo_file = st.file_uploader("Company Logo (png/jpg)", type=["png", "jpg", "jpeg"])
     with col_header:
-        st.subheader("Your Company (Header - constant)")
+        st.subheader("Company Header (Constant)")
         company_name = st.text_input("Company Name", value="Your Company Pvt Ltd")
         company_address = st.text_area("Company Address", value="Street, City, State\nPin - 400xxx")
 
     st.markdown("---")
 
-    # VENDOR DETAILS
+    # Vendor Details
     st.subheader("Vendor Details")
     v1, v2 = st.columns(2)
     with v1:
@@ -86,7 +86,7 @@ with tab1:
 
     st.markdown("---")
 
-    # JOB DETAILS
+    # Job Details
     st.subheader("Job Details")
     j1, j2, j3 = st.columns(3)
     with j1:
@@ -98,12 +98,11 @@ with tab1:
 
     st.markdown("---")
 
-    # ITEMS (dynamic)
+    # Items (dynamic)
     st.subheader("Item Details (Add/Delete rows)")
     if st.button("➕ Add Item"):
         st.session_state.items.append({"Description": "", "Drawing No": "", "Drawing Link": "", "Grade": "", "Qty": 0, "UOM": "Nos"})
 
-    # Show items with inline delete
     remove_idx = None
     for i, it in enumerate(st.session_state.items):
         cols = st.columns([3,2,2,1,1,0.5])
@@ -119,7 +118,7 @@ with tab1:
 
     st.markdown("---")
 
-    # MATERIAL ISSUED
+    # Material Issued
     st.subheader("Material Issued to Vendor (Add/Delete rows)")
     if st.button("➕ Add Material"):
         st.session_state.materials.append({"Raw Material": "", "Heat No": "", "Dia/Size": "", "Weight": 0.0, "Qty": 0.0, "Remark": ""})
@@ -138,7 +137,7 @@ with tab1:
 
     st.markdown("---")
 
-    # OPERATIONS
+    # Operations
     st.subheader("Operation Checklist")
     operations = [
         "Cutting", "Turning (Traub/CNC)", "Milling", "Threading", "Drilling",
@@ -151,7 +150,7 @@ with tab1:
 
     st.markdown("---")
 
-    # MACHINE DETAILS (optional)
+    # Machine Details
     st.subheader("Machine Specific Details (Optional)")
     show_machine = st.checkbox("Show Machine Details")
     machine_details = {}
@@ -166,9 +165,10 @@ with tab1:
             machine_details = {"Machine Type": machine_type, "Cycle Time": cycle_time, "RPM": rpm, "Feed": feed, "Gear Setup": gear_setup}
         else:
             machine_details = {"Machine Type": machine_type, "Cycle Time": cycle_time, "RPM": rpm, "Feed": feed}
+
     st.markdown("---")
 
-    # QUALITY
+    # Quality Instructions
     st.subheader("Quality Instructions")
     tolerance = st.text_input("Tolerance (as per drawing)")
     surface_finish = st.text_input("Surface Finish (Ra µm)")
@@ -177,7 +177,7 @@ with tab1:
 
     st.markdown("---")
 
-    # GOODS RECEIVED (GRN)
+    # Goods Received / GRN
     st.subheader("Goods Received / QC (Add/Delete rows)")
     if st.button("➕ Add GRN Entry"):
         st.session_state.grn_entries.append({"Date": "", "Qty Received": 0.0, "OK Qty": 0.0, "Rejected Qty": 0.0, "Remarks": "", "QC Approved By": ""})
@@ -197,37 +197,19 @@ with tab1:
 
     st.markdown("---")
 
-    # Save / Next
-    save_col1, save_col2 = st.columns([1,1])
-    with save_col1:
-        if st.button("Save Job (no deploy)") :
-            st.success("Job saved locally in session state.")
-    with save_col2:
-        if st.button("Save & Next (auto-job no)"):
-            # increment job no token (simple)
-            st.session_state.next_job_no = datetime.now().strftime("JC-%Y%m%d-%H%M%S")
-            st.session_state.items = []
-            st.session_state.materials = []
-            st.session_state.grn_entries = []
-            st.success("Saved. Ready for next job.")
-    st.info("Use the Preview tab to see the exact job card layout and Print it.")
-
 # -------------------------
 # TAB 2: PREVIEW
 # -------------------------
 with tab2:
     st.markdown(f"<h2 style='color:{PRIMARY_COLOR}'>Job Card Preview</h2>", unsafe_allow_html=True)
-
-    # Build QR text. Use vendor_id too.
+    # Build preview QR
     qr_text = f"JobNo:{job_no}|Date:{job_date}|Dispatch:{dispatch_location}|VendorID:{vendor_id}"
     qr_bytes, qr_img_pil = make_qr_bytes(qr_text)
 
-    # Convert session rows -> DataFrame for display/pdf
     item_df = rows_to_df(st.session_state.items, ["Description", "Drawing No", "Drawing Link", "Grade", "Qty", "UOM"])
     mat_df = rows_to_df(st.session_state.materials, ["Raw Material", "Heat No", "Dia/Size", "Weight", "Qty", "Remark"])
     grn_df = rows_to_df(st.session_state.grn_entries, ["Date", "Qty Received", "OK Qty", "Rejected Qty", "Remarks", "QC Approved By"])
 
-    # Build preview HTML (styled)
     preview_html = f"""
     <div style="padding:18px; border-radius:12px; border:2px solid {PRIMARY_COLOR}; background:#f8fafb;">
       <h2 style="text-align:center; color:{PRIMARY_COLOR}; margin-top:6px;">{company_name}</h2>
@@ -241,11 +223,9 @@ with tab2:
           <b>Address:</b> {vendor_address}<br/>
         </div>
         <div style="flex:1; text-align:right;">
-          <img src="data:image/png;base64,{base64.b64encode(qr_bytes).decode()}" width="120"/><br/>
-          <small>QR: JobNo | Date | Dispatch | VendorID</small>
+          <img src="data:image/png;base64,{base64.b64encode(qr_bytes).decode()}" width="120"/>
         </div>
       </div>
-
       <hr style="border:1px solid #e6eef8; margin:10px 0;"/>
       <div style="display:flex; gap:18px;">
         <div style="flex:1;">
@@ -256,15 +236,13 @@ with tab2:
           <b>Dispatch Location:</b> {dispatch_location}<br/>
         </div>
       </div>
-
       <h4 style="color:{PRIMARY_COLOR}; margin-top:14px;">Items</h4>
-      {item_df.to_html(index=False, classes='item-table', border=1)}
+      {item_df.to_html(index=False, border=1)}
       <h4 style="color:{PRIMARY_COLOR}; margin-top:12px;">Material Issued</h4>
-      {mat_df.to_html(index=False, classes='mat-table', border=1)}
+      {mat_df.to_html(index=False, border=1)}
       <h4 style="color:{PRIMARY_COLOR}; margin-top:12px;">Operations</h4>
       <div>{', '.join([op for op, v in op_selected.items() if v]) or 'None'}</div>
-
-      """
+    """
 
     if show_machine and machine_details:
         preview_html += "<h4 style='color:{}; margin-top:12px;'>Machine Details</h4>".format(PRIMARY_COLOR)
@@ -284,7 +262,6 @@ with tab2:
       </div>
     </div>
     """
-
     st.markdown(preview_html, unsafe_allow_html=True)
 
 # -------------------------
@@ -292,25 +269,23 @@ with tab2:
 # -------------------------
 with tab3:
     st.markdown(f"<h2 style='color:{PRIMARY_COLOR}'>PDF Export</h2>", unsafe_allow_html=True)
-    st.write("PDF will mirror the preview design with colored headers and structured tables.")
+    st.write("Click to generate a structured PDF.")
 
     if st.button("🔁 Generate PDF"):
-        # Prepare dataframes
+        # prepare tables
         item_df = rows_to_df(st.session_state.items, ["Description", "Drawing No", "Drawing Link", "Grade", "Qty", "UOM"])
         mat_df = rows_to_df(st.session_state.materials, ["Raw Material", "Heat No", "Dia/Size", "Weight", "Qty", "Remark"])
         grn_df = rows_to_df(st.session_state.grn_entries, ["Date", "Qty Received", "OK Qty", "Rejected Qty", "Remarks", "QC Approved By"])
 
-        # Build PDF
         buf = BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=25, rightMargin=25, topMargin=25, bottomMargin=25)
         styles = getSampleStyleSheet()
         story = []
 
-        # Header table (logo + company)
+        # Header with logo
         header_cells = []
         if logo_file:
             try:
-                # streamlit uploaded file (seekable)
                 logo_bytes = logo_file.getvalue()
                 header_cells.append([RLImage(BytesIO(logo_bytes), width=60, height=60),
                                      Paragraph(f"<b>{company_name}</b><br/>{company_address}", styles['Title'])])
@@ -324,7 +299,7 @@ with tab3:
         story.append(header_tbl)
         story.append(Spacer(1, 8))
 
-        # Job & Vendor blocks
+        # Job table
         job_block = [
             ['Job Card No', job_no],
             ['Date', str(job_date)],
@@ -339,6 +314,7 @@ with tab3:
         story.append(job_tbl)
         story.append(Spacer(1, 10))
 
+        # Vendor table
         vendor_block = [
             ['Vendor ID', vendor_id],
             ['Vendor Company', vendor_company],
@@ -362,15 +338,13 @@ with tab3:
             story.append(Paragraph("No items added.", styles['Normal']))
         else:
             data = [item_df.columns.tolist()] + item_df.fillna('').values.tolist()
-            tbl = Table(data, colWidths=[120,80,120,60,40,40], repeatRows=1)
+            tbl = Table(data, colWidths=[120,80,80,60,40,40])
             tbl.setStyle(TableStyle([
-                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#cfe2f3')),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#dbe5f1'))
             ]))
             story.append(tbl)
-        story.append(Spacer(1, 12))
+        story.append(Spacer(1, 10))
 
         # Material table
         story.append(Paragraph("Material Issued", styles['Heading2']))
@@ -378,65 +352,50 @@ with tab3:
             story.append(Paragraph("No materials added.", styles['Normal']))
         else:
             data = [mat_df.columns.tolist()] + mat_df.fillna('').values.tolist()
-            m_tbl = Table(data, colWidths=[120,80,80,60,40,80], repeatRows=1)
-            m_tbl.setStyle(TableStyle([
-                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#d4efd9')),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            tbl = Table(data, colWidths=[100,60,50,50,40,60])
+            tbl.setStyle(TableStyle([
+                ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f2f2f2'))
             ]))
-            story.append(m_tbl)
-        story.append(Spacer(1, 12))
+            story.append(tbl)
+        story.append(Spacer(1, 10))
 
         # Operations
         story.append(Paragraph("Operations Selected", styles['Heading2']))
-        ops_txt = ', '.join([op for op, v in op_selected.items() if v]) or "None"
-        story.append(Paragraph(ops_txt, styles['Normal']))
-        story.append(Spacer(1, 12))
+        ops_text = ', '.join([op for op, v in op_selected.items() if v]) or "None"
+        story.append(Paragraph(ops_text, styles['Normal']))
+        story.append(Spacer(1, 8))
 
-        # Machine details
+        # Machine Details
         if show_machine and machine_details:
             story.append(Paragraph("Machine Details", styles['Heading2']))
-            machine_rows = [[k, v] for k, v in machine_details.items()]
-            mach_tbl = Table(machine_rows, colWidths=[140, 360])
-            mach_tbl.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.4, colors.grey)]))
-            story.append(mach_tbl)
-            story.append(Spacer(1, 12))
+            for k,v in machine_details.items():
+                story.append(Paragraph(f"{k}: {v}", styles['Normal']))
+            story.append(Spacer(1, 8))
 
         # Quality
         story.append(Paragraph("Quality Instructions", styles['Heading2']))
-        story.append(Paragraph(f"Tolerance: {tolerance} | Surface Finish: {surface_finish} | Hardness: {hardness}", styles['Normal']))
-        story.append(Spacer(1, 12))
+        story.append(Paragraph(f"Tolerance: {tolerance}", styles['Normal']))
+        story.append(Paragraph(f"Surface Finish: {surface_finish}", styles['Normal']))
+        story.append(Paragraph(f"Hardness: {hardness}", styles['Normal']))
+        if thread_check:
+            story.append(Paragraph(f"Thread: GO/NO-GO Check Required", styles['Normal']))
+        story.append(Spacer(1, 8))
 
         # GRN
         story.append(Paragraph("Goods Received / QC", styles['Heading2']))
         if grn_df.empty:
-            story.append(Paragraph("No GRN entries.", styles['Normal']))
+            story.append(Paragraph("No entries added.", styles['Normal']))
         else:
             data = [grn_df.columns.tolist()] + grn_df.fillna('').values.tolist()
-            g_tbl = Table(data, colWidths=[80,70,60,70,150,100], repeatRows=1)
-            g_tbl.setStyle(TableStyle([
-                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#ffd9b3')),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            tbl = Table(data, colWidths=[70,50,50,50,80,80])
+            tbl.setStyle(TableStyle([
+                ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f0f8ff'))
             ]))
-            story.append(g_tbl)
+            story.append(tbl)
         story.append(Spacer(1, 12))
 
-        # QR embed
-        qr_bts, _ = make_qr_bytes(qr_text)
-        try:
-            rl_qr = RLImage(BytesIO(qr_bts), width=90, height=90)
-            story.append(rl_qr)
-        except Exception:
-            pass
-
-        # Build
         doc.build(story)
         buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode()
-        href = f'<a href="data:application/octet-stream;base64,{b64}" download="jobcard_{job_no}.pdf">⬇️ Download PDF</a>'
-        st.markdown(href, unsafe_allow_html=True)
-
-    st.caption("The PDF structure mirrors the Preview layout with colored headers, tables, and the QR code.")
-
-# End of app
+        st.download_button("⬇️ Download PDF", buf, "vendor_job_card.pdf", mime="application/pdf")
