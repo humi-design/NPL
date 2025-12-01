@@ -258,3 +258,100 @@ with tab2:
         doc.build(story)
         buf.seek(0)
         st.download_button("⬇️ Download PDF to Print", buf, "job_card.pdf", mime="application/pdf")
+
+# -----------------------------
+# TAB 3: PDF Export (HTML-to-PDF)
+# -----------------------------
+import base64
+import pdfkit
+
+with tab3:
+    st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Export Professional Job Card PDF</h1>", unsafe_allow_html=True)
+
+    # Render Preview tab HTML as a string
+    def generate_preview_html():
+        # Convert QR code to base64
+        qr_buf = BytesIO()
+        qr_img.save(qr_buf, format="PNG")
+        qr_base64 = base64.b64encode(qr_buf.getvalue()).decode()
+
+        # Items table HTML
+        items_df = rows_to_df(st.session_state['items'], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"])
+        items_html = items_df.to_html(index=False, border=1, justify="center")
+
+        # Materials table HTML
+        mat_df = rows_to_df(st.session_state['materials'], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"])
+        mat_html = mat_df.to_html(index=False, border=1, justify="center")
+
+        # GRN table HTML
+        grn_df = rows_to_df(st.session_state['grn_entries'], ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"])
+        grn_html = grn_df.to_html(index=False, border=1, justify="center")
+
+        # Operations selected
+        ops_html = ', '.join([op for op, sel in op_selected.items() if sel]) or "None"
+
+        # Machine details HTML
+        machine_html = ""
+        if show_machine and machine_details:
+            machine_html += "<ul>"
+            for k,v in machine_details.items():
+                machine_html += f"<li><b>{k}:</b> {v}</li>"
+            machine_html += "</ul>"
+
+        # Thread check
+        thread_html = "Thread: GO/NO-GO Required" if thread_check else ""
+
+        html_content = f"""
+        <html>
+        <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; }}
+            h1 {{ color: {PRIMARY_COLOR}; }}
+            table {{ border-collapse: collapse; width: 100%; margin-bottom: 15px; }}
+            th, td {{ border: 1px solid black; padding: 5px; text-align: center; }}
+            th {{ background-color: #dbe5f1; }}
+            ul {{ list-style-type: none; padding-left: 0; }}
+        </style>
+        </head>
+        <body>
+            <h1>{company_name}</h1>
+            <p>{company_address}</p>
+            <h2>Vendor Details</h2>
+            <p>
+            Vendor ID: {vendor_id}<br>
+            Company: {vendor_company}<br>
+            Contact Person: {vendor_person}<br>
+            Mobile: {vendor_mobile}<br>
+            GST: {vendor_gst}<br>
+            Address: {vendor_address}
+            </p>
+            <h2>Job Details</h2>
+            <p>Job No: {job_no}<br>Date: {job_date}<br>Dispatch Location: {dispatch_location}</p>
+            <img src="data:image/png;base64,{qr_base64}" width="150" height="150" />
+            <h2>Item Details</h2>
+            {items_html}
+            <h2>Material Issued</h2>
+            {mat_html}
+            <h2>Operations</h2>
+            <p>{ops_html}</p>
+            <h2>Machine Details</h2>
+            {machine_html}
+            <h2>Quality Instructions</h2>
+            <p>Tolerance: {tolerance}<br>
+            Surface Finish: {surface_finish}<br>
+            Hardness: {hardness}<br>
+            {thread_html}
+            </p>
+            <h2>Goods Received / QC</h2>
+            {grn_html}
+        </body>
+        </html>
+        """
+        return html_content
+
+    if st.button("⬇️ Download PDF (Exact Preview)"):
+        html = generate_preview_html()
+        pdf_bytes = pdfkit.from_string(html, False)
+        st.download_button("Download Job Card PDF", pdf_bytes, "job_card.pdf", mime="application/pdf")
+
