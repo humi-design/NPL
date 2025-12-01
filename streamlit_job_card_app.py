@@ -185,54 +185,34 @@ with tab1:
 # -----------------------------
 # TAB 2: Preview (HTML-based, PDF friendly)
 # -----------------------------
+# -----------------------------
+# TAB 2: Preview (FIXED)
+# -----------------------------
 with tab2:
+
     st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Preview Job Card</h1>", unsafe_allow_html=True)
 
-    # prepare base64 strings for logo and qr
-    logo_img_html = ""
-    if 'logo_b64' in locals() and logo_b64:
-        logo_img_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:100px;'/>"
-    else:
-        # logo_file may exist but we read it earlier; fallback empty
-        logo_img_html = ""
+    # Convert QR → Base64 safely
+    qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
 
-    qr_b64 = base64.b64encode(qr_bytes).decode("utf-8") if 'qr_bytes' in locals() and qr_bytes else ""
-    qr_img_html = f"<img src='data:image/png;base64,{qr_b64}' width='150'/>" if qr_b64 else ""
+    # Convert logo → Base64 safely
+    logo_b64 = ""
+    if logo_file:
+        logo_bytes = logo_file.read()
+        logo_b64 = base64.b64encode(logo_bytes).decode("utf-8")
 
-    # Build the preview HTML safely using placeholders
-    # Use triple-quoted string but without embedding python blocks inside it
-    items_rows_html = ""
-    for r in st.session_state['items']:
-        # ensure each field exists
-        r_safe = [("" if c is None else c) for c in r]
-        items_rows_html += f"<tr><td>{r_safe[0]}</td><td>{r_safe[1]}</td><td>{r_safe[2]}</td><td>{r_safe[3]}</td><td>{r_safe[4]}</td><td>{r_safe[5]}</td></tr>"
-
-    mats_rows_html = ""
-    for m in st.session_state['materials']:
-        m_safe = [("" if c is None else c) for c in m]
-        mats_rows_html += f"<tr><td>{m_safe[0]}</td><td>{m_safe[1]}</td><td>{m_safe[2]}</td><td>{m_safe[3]}</td><td>{m_safe[4]}</td><td>{m_safe[5]}</td></tr>"
-
-    grn_rows_html = ""
-    for g in st.session_state['grn_entries']:
-        g_safe = [("" if c is None else c) for c in g]
-        grn_rows_html += f"<tr><td>{g_safe[0]}</td><td>{g_safe[1]}</td><td>{g_safe[2]}</td><td>{g_safe[3]}</td><td>{g_safe[4]}</td><td>{g_safe[5]}</td></tr>"
-
-    ops_text = ', '.join([op for op, sel in op_selected.items() if sel]) or "None"
-
-    machine_html = ""
-    if show_machine and machine_details:
-        for k, v in machine_details.items():
-            machine_html += f"<p><b>{k}:</b> {v}</p>"
-
+    # Build HTML safely (NO python blocks inside HTML!)
     html = f"""
     <div style='font-family:Arial; padding:20px; border:2px solid #ccc; border-radius:10px; background:#f8f9fb;'>
 
         <!-- HEADER -->
         <div style='display:flex; align-items:center; gap:20px;'>
-            <div style='width:100px;'>{logo_img_html}</div>
+            <div style='width:100px;'>
+                {"<img src='data:image/png;base64," + logo_b64 + "' style='width:100px;'/>" if logo_b64 else ""}
+            </div>
             <div style='font-size:18px; font-weight:bold;'>
-                {company_name or ''}
-                <div style='font-size:14px; font-weight:normal;'>{(company_address or '').replace('\n','<br>')}</div>
+                {company_name}<br>
+                <span style='font-size:14px; font-weight:normal;'>{company_address}</span>
             </div>
         </div>
 
@@ -241,12 +221,12 @@ with tab2:
         <!-- VENDOR DETAILS -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Vendor Details</h2>
         <table style='width:100%; border-collapse: collapse;'>
-            <tr><td><b>Vendor ID</b></td><td>{vendor_id or ''}</td></tr>
-            <tr><td><b>Company</b></td><td>{vendor_company or ''}</td></tr>
-            <tr><td><b>Contact Person</b></td><td>{vendor_person or ''}</td></tr>
-            <tr><td><b>Mobile</b></td><td>{vendor_mobile or ''}</td></tr>
-            <tr><td><b>GST</b></td><td>{vendor_gst or ''}</td></tr>
-            <tr><td><b>Address</b></td><td>{(vendor_address or '').replace('\n','<br>')}</td></tr>
+            <tr><td><b>Vendor ID</b></td><td>{vendor_id}</td></tr>
+            <tr><td><b>Company</b></td><td>{vendor_company}</td></tr>
+            <tr><td><b>Contact Person</b></td><td>{vendor_person}</td></tr>
+            <tr><td><b>Mobile</b></td><td>{vendor_mobile}</td></tr>
+            <tr><td><b>GST</b></td><td>{vendor_gst}</td></tr>
+            <tr><td><b>Address</b></td><td>{vendor_address}</td></tr>
         </table>
 
         <hr>
@@ -254,13 +234,16 @@ with tab2:
         <!-- JOB DETAILS -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Job Details</h2>
         <table style='width:100%; border-collapse: collapse;'>
-            <tr><td><b>Job No</b></td><td>{job_no or ''}</td></tr>
+            <tr><td><b>Job No</b></td><td>{job_no}</td></tr>
             <tr><td><b>Date</b></td><td>{job_date}</td></tr>
-            <tr><td><b>Dispatch Location</b></td><td>{dispatch_location or ''}</td></tr>
+            <tr><td><b>Dispatch Location</b></td><td>{dispatch_location}</td></tr>
         </table>
 
         <br>
-        {qr_img_html}
+
+        <h3>QR Code</h3>
+        <img src='data:image/png;base64,{qr_b64}' width='150'>
+
         <hr>
 
         <!-- ITEM DETAILS -->
@@ -270,7 +253,7 @@ with tab2:
                 <th>Description</th><th>Drawing No</th><th>Drawing Link</th>
                 <th>Grade</th><th>Qty</th><th>UOM</th>
             </tr>
-            {items_rows_html}
+            {''.join([f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td></tr>" for r in st.session_state['items']])}
         </table>
 
         <hr>
@@ -282,25 +265,25 @@ with tab2:
                 <th>Raw Material</th><th>Heat No</th><th>Dia/Size</th>
                 <th>Weight</th><th>Qty</th><th>Remark</th>
             </tr>
-            {mats_rows_html}
+            {''.join([f"<tr><td>{m[0]}</td><td>{m[1]}</td><td>{m[2]}</td><td>{m[3]}</td><td>{m[4]}</td><td>{m[5]}</td></tr>" for m in st.session_state['materials']])}
         </table>
 
         <hr>
 
         <!-- OPERATIONS -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Operations</h2>
-        <p>{ops_text}</p>
+        <p>{", ".join([op for op, sel in op_selected.items() if sel]) or "None"}</p>
 
-        {machine_html}
+        {("<h2 style='color:"+PRIMARY_COLOR+";'>Machine Details</h2>" + ''.join([f"<p><b>{k}:</b> {v}</p>" for k,v in machine_details.items()])) if show_machine else ""}
 
         <hr>
 
         <!-- QUALITY -->
         <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Quality Instructions</h2>
-        <p><b>Tolerance:</b> {tolerance or ''}</p>
-        <p><b>Surface Finish:</b> {surface_finish or ''}</p>
-        <p><b>Hardness:</b> {hardness or ''}</p>
-        {("<p><b>Thread:</b> GO/NO-GO Required</p>" if thread_check else "")}
+        <p><b>Tolerance:</b> {tolerance}</p>
+        <p><b>Surface Finish:</b> {surface_finish}</p>
+        <p><b>Hardness:</b> {hardness}</p>
+        {"<p><b>Thread:</b> GO/NO-GO Required</p>" if thread_check else ""}
 
         <hr>
 
@@ -311,16 +294,13 @@ with tab2:
                 <th>Date</th><th>Qty Received</th><th>OK Qty</th>
                 <th>Rejected Qty</th><th>Remarks</th><th>QC Approved By</th>
             </tr>
-            {grn_rows_html}
+            {''.join([f"<tr><td>{g[0]}</td><td>{g[1]}</td><td>{g[2]}</td><td>{g[3]}</td><td>{g[4]}</td><td>{g[5]}</td></tr>" for g in st.session_state['grn_entries']])}
         </table>
 
     </div>
     """
 
-    # Display Preview (HTML)
     st.markdown(html, unsafe_allow_html=True)
-
-    # Save HTML for PDF generation in tab3
     st.session_state["preview_html"] = html
 
 # -----------------------------
