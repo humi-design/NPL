@@ -217,79 +217,142 @@ else:
     grv_table = pd.DataFrame(st.session_state.grn_rows)
 
 # ----------------------------------------------------
-# PDF GENERATION
+# PDF GENERATION (IMPROVED, STRUCTURED, ATTRACTIVE)
 # ----------------------------------------------------
 st.subheader("Generate Job Card PDF")
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib import colors
 
 def make_pdf():
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=30, rightMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
     story = []
 
-    # Company Header with Logo
+    # Company Header Block
+    header_data = []
     if logo_file:
-        try:
-            logo = RLImage(logo_file, width=80, height=80)
-            story.append(logo)
-        except Exception:
-            pass
-    story.append(Paragraph(f"<b>{company_name}</b><br/>{company_address}", styles['Title']))
+        header_data.append([RLImage(logo_file, width=60, height=60), Paragraph(f"<b>{company_name}</b><br/>{company_address}", styles['Title'])])
+    else:
+        header_data.append(["", Paragraph(f"<b>{company_name}</b><br/>{company_address}", styles['Title'])])
+
+    header_table = Table(header_data, colWidths=[70, 430])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 12)
+    ]))
+    story.append(header_table)
     story.append(Spacer(1, 12))
 
-    # Vendor
-    story.append(Paragraph(f"<b>Vendor ID:</b> {vendor_id}", styles['Normal']))
-    story.append(Paragraph(f"<b>Vendor Company:</b> {vendor_company}", styles['Normal']))
-    story.append(Paragraph(f"<b>Vendor Person:</b> {vendor_person}", styles['Normal']))
-    story.append(Paragraph(f"<b>Mobile:</b> {vendor_mobile}", styles['Normal']))
-    story.append(Paragraph(f"<b>GST:</b> {vendor_gst}", styles['Normal']))
-    story.append(Paragraph(f"<b>Address:</b> {vendor_address}", styles['Normal']))
+    # Job Card Title Bar
+    story.append(Paragraph('<para alignment="center"><b><font size=16>VENDOR JOB CARD</font></b></para>', styles['Title']))
     story.append(Spacer(1, 12))
 
-    # Job details
-    story.append(Paragraph(f"<b>Job No:</b> {job_no}", styles['Normal']))
-    story.append(Paragraph(f"<b>Date:</b> {date}", styles['Normal']))
-    story.append(Paragraph(f"<b>Dispatch Location:</b> {dispatch_location}", styles['Normal']))
-    story.append(Spacer(1, 12))
+    # Vendor Info Block
+    vendor_block = [
+        ['Vendor ID', vendor_id],
+        ['Vendor Company', vendor_company],
+        ['Contact Person', vendor_person],
+        ['Mobile', vendor_mobile],
+        ['GST Number', vendor_gst],
+        ['Address', vendor_address]
+    ]
+    vendor_table = Table(vendor_block, colWidths=[120, 380])
+    vendor_table.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+    ]))
+    story.append(vendor_table)
+    story.append(Spacer(1, 18))
 
-    # Tables
-    story.append(Paragraph("<b>Item Details:</b>", styles['Heading2']))
-    story.append(Paragraph(item_table.to_html(index=False), styles['Normal']))
+    # Job Details Block
+    job_block = [
+        ['Job Card No', job_no],
+        ['Date', str(date)],
+        ['Dispatch Location', dispatch_location]
+    ]
+    job_table = Table(job_block, colWidths=[150, 350])
+    job_table.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+    ]))
+    story.append(job_table)
+    story.append(Spacer(1, 18))
 
-    story.append(Paragraph("<b>Material Issued:</b>", styles['Heading2']))
-    story.append(Paragraph(material_table.to_html(index=False), styles['Normal']))
-
-    story.append(Paragraph("<b>Operations:</b> " + ", ".join([op for op, v in op_selected.items() if v]), styles['Normal']))
-
-    if show_machine:
-        story.append(Paragraph(f"<b>Machine:</b> {machine_type}", styles['Normal']))
-        story.append(Paragraph(f"Cycle Time: {cycle_time}", styles['Normal']))
-        story.append(Paragraph(f"RPM: {rpm}", styles['Normal']))
-        story.append(Paragraph(f"Feed: {feed}", styles['Normal']))
-        if machine_type == "Traub":
-            story.append(Paragraph(f"Gear Setup: {gear_setup}", styles['Normal']))
-
-    # Quality
-    story.append(Paragraph("<b>Quality:</b>", styles['Heading2']))
-    story.append(Paragraph(f"Tolerance: {tolerance}", styles['Normal']))
-    story.append(Paragraph(f"Finish: {finish}", styles['Normal']))
-    story.append(Paragraph(f"Hardness: {hardness}", styles['Normal']))
-
-    # GRN
-    story.append(Paragraph("<b>Goods Received:</b>", styles['Heading2']))
-    story.append(Paragraph(grv_table.to_html(index=False), styles['Normal']))
-
-    # Include QR image in PDF (if available)
+    # QR Code
     if qr_img:
-        try:
-            qr_buf = BytesIO()
-            qr_img.save(qr_buf, format='PNG')
-            qr_buf.seek(0)
-            rl_qr = RLImage(qr_buf, width=100, height=100)
-            story.append(Spacer(1, 12))
-            story.append(rl_qr)
-        except Exception:
-            pass
+        buf_qr = BytesIO()
+        qr_img.save(buf_qr, format='PNG')
+        story.append(RLImage(buf_qr, width=90, height=90))
+        story.append(Spacer(1, 12))
+
+    # ITEM DETAILS TABLE
+    story.append(Paragraph('<b>Item Details</b>', styles['Heading2']))
+    item_tbl = Table([item_table.columns.tolist()] + item_table.values.tolist(), repeatRows=1)
+    item_tbl.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightblue),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+    ]))
+    story.append(item_tbl)
+    story.append(Spacer(1, 18))
+
+    # MATERIAL ISSUED
+    story.append(Paragraph('<b>Material Issued to Vendor</b>', styles['Heading2']))
+    material_tbl = Table([material_table.columns.tolist()] + material_table.values.tolist(), repeatRows=1)
+    material_tbl.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgreen),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+    ]))
+    story.append(material_tbl)
+    story.append(Spacer(1, 18))
+
+    # OPERATIONS
+    story.append(Paragraph('<b>Operations Selected</b>', styles['Heading2']))
+    selected_ops = ', '.join([op for op, val in op_selected.items() if val]) or 'None'
+    story.append(Paragraph(selected_ops, styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # MACHINE DETAILS
+    if show_machine:
+        story.append(Paragraph('<b>Machine Details</b>', styles['Heading2']))
+        machine_data = [
+            ['Machine Type', machine_type],
+            ['Cycle Time', cycle_time],
+            ['RPM', rpm],
+            ['Feed', feed]
+        ]
+        if machine_type == 'Traub':
+            machine_data.append(['Traub Gear Setup', gear_setup])
+
+        machine_tbl = Table(machine_data, colWidths=[150, 350])
+        machine_tbl.setStyle(TableStyle([
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('BACKGROUND', (0,0), (-1,0), colors.lightpink)
+        ]))
+        story.append(machine_tbl)
+        story.append(Spacer(1, 18))
+
+    # QUALITY
+    story.append(Paragraph('<b>Quality Instructions</b>', styles['Heading2']))
+    quality_items = f"Tolerance: {tolerance}<br/>Surface Finish: {finish}<br/>Hardness: {hardness}"
+    story.append(Paragraph(quality_items, styles['Normal']))
+    story.append(Spacer(1, 18))
+
+    # GOODS RECEIVED
+    story.append(Paragraph('<b>Goods Received</b>', styles['Heading2']))
+    grv_tbl = Table([grv_table.columns.tolist()] + grv_table.values.tolist(), repeatRows=1)
+    grv_tbl.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,0), (-1,0), colors.orange),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+    ]))
+    story.append(grv_tbl)
 
     doc.build(story)
     buffer.seek(0)
