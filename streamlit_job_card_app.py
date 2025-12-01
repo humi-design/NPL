@@ -236,23 +236,111 @@ with tab3:
     if not st.session_state['items']:
         st.warning("Please fill the form and go to Preview tab first.")
     else:
-        # Step 1: Convert QR to base64
+        # Convert QR to base64
         qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
 
-        # Step 2: Generate professional HTML
-        st.session_state["pdf_html"] = professional_html  # <-- Place the code I shared here
+        # PROFESSIONAL PDF HTML
+        pdf_html = f"""
+        <div style='font-family:Arial; padding:20px; border:2px solid #ccc; border-radius:10px; background:#f8f9fb;'>
 
-        # Step 3: Add Generate PDF button
+            <!-- HEADER -->
+            <div style='display:flex; align-items:center; gap:20px;'>
+                <div style='width:100px;'>
+                    {"<img src='data:image/png;base64," + base64.b64encode(logo_file.read()).decode() + "' style='width:100px;'/>" if logo_file else ""}
+                </div>
+                <div style='font-size:18px; font-weight:bold;'>
+                    {company_name}<br>
+                    <span style='font-size:14px; font-weight:normal;'>{company_address}</span>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- VENDOR DETAILS -->
+            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Vendor Details</h2>
+            <table style='width:100%; border-collapse: collapse;'>
+                <tr><td><b>Vendor ID</b></td><td>{vendor_id}</td></tr>
+                <tr><td><b>Company</b></td><td>{vendor_company}</td></tr>
+                <tr><td><b>Contact Person</b></td><td>{vendor_person}</td></tr>
+                <tr><td><b>Mobile</b></td><td>{vendor_mobile}</td></tr>
+                <tr><td><b>GST</b></td><td>{vendor_gst}</td></tr>
+                <tr><td><b>Address</b></td><td>{vendor_address}</td></tr>
+            </table>
+
+            <hr>
+
+            <!-- JOB DETAILS -->
+            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Job Details</h2>
+            <table style='width:100%; border-collapse: collapse;'>
+                <tr><td><b>Job No</b></td><td>{job_no}</td></tr>
+                <tr><td><b>Date</b></td><td>{job_date}</td></tr>
+                <tr><td><b>Dispatch Location</b></td><td>{dispatch_location}</td></tr>
+            </table>
+
+            <br>
+            <!-- QR CODE -->
+            <h3>QR Code</h3>
+            <img src='data:image/png;base64,{qr_b64}' width='150'>
+
+            <hr>
+
+            <!-- ITEM DETAILS -->
+            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Item Details</h2>
+            <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
+                <tr style='background:#d9e3f0;'>
+                    <th>Description</th><th>Drawing No</th><th>Drawing Link</th>
+                    <th>Grade</th><th>Qty</th><th>UOM</th>
+                </tr>
+                {"".join([f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td></tr>" for r in st.session_state['items']])}
+            </table>
+
+            <hr>
+
+            <!-- MATERIAL ISSUED -->
+            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Material Issued</h2>
+            <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
+                <tr style='background:#d9e3f0;'>
+                    <th>Raw Material</th><th>Heat No</th><th>Dia/Size</th>
+                    <th>Weight</th><th>Qty</th><th>Remark</th>
+                </tr>
+                {"".join([f"<tr><td>{m[0]}</td><td>{m[1]}</td><td>{m[2]}</td><td>{m[3]}</td><td>{m[4]}</td><td>{m[5]}</td></tr>" for m in st.session_state['materials']])}
+            </table>
+
+            <hr>
+
+            <!-- OPERATIONS -->
+            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Operations</h2>
+            <p>{", ".join([op for op, sel in op_selected.items() if sel]) or "None"}</p>
+
+            {"<h2 style='color:"+PRIMARY_COLOR+";'>Machine Details</h2>" if show_machine else ""}
+            {"".join([f"<p><b>{k}:</b> {v}</p>" for k,v in machine_details.items()]) if show_machine else ""}
+
+            <hr>
+
+            <!-- QUALITY -->
+            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Quality Instructions</h2>
+            <p><b>Tolerance:</b> {tolerance}</p>
+            <p><b>Surface Finish:</b> {surface_finish}</p>
+            <p><b>Hardness:</b> {hardness}</p>
+            {"<p><b>Thread:</b> GO/NO-GO Required</p>" if thread_check else ""}
+
+            <hr>
+
+            <!-- GOODS RECEIVED -->
+            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Goods Received / QC</h2>
+            <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
+                <tr style='background:#d9e3f0;'>
+                    <th>Date</th><th>Qty Received</th><th>OK Qty</th>
+                    <th>Rejected Qty</th><th>Remarks</th><th>QC Approved By</th>
+                </tr>
+                {"".join([f"<tr><td>{g[0]}</td><td>{g[1]}</td><td>{g[2]}</td><td>{g[3]}</td><td>{g[4]}</td><td>{g[5]}</td></tr>" for g in st.session_state['grn_entries']])}
+            </table>
+
+        </div>
+        """
+
+        # Step 3: Generate PDF using WeasyPrint
         if st.button("Generate PDF"):
             from weasyprint import HTML
-            pdf_bytes = HTML(string=st.session_state["pdf_html"]).write_pdf()
-
-            st.success("PDF generated successfully!")
-
-            st.download_button(
-                label="⬇️ Download Job Card PDF",
-                data=pdf_bytes,
-                file_name=f"JobCard_{job_no}.pdf",
-                mime="application/pdf"
-            )
-
+            pdf_bytes = HTML(string=pdf_html).write_pdf()
+            st.download_button("⬇️ Download Job Card PDF", pdf_bytes, file_name=f"JobCard_{job_no}.pdf", mime="application/pdf")
