@@ -233,52 +233,26 @@ with tab2:
 with tab3:
     st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Download PDF</h1>", unsafe_allow_html=True)
 
-    if "preview_html" not in st.session_state:
-        st.warning("Please fill the form and open the Preview tab first.")
+    if not st.session_state['items']:
+        st.warning("Please fill the form and go to Preview tab first.")
     else:
-        html = st.session_state["preview_html"]
+        # Step 1: Convert QR to base64
+        qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
 
-        # Add global print styles for PDF
-        styled_html = f"""
-        <html>
-        <head>
-        <style>
-            @page {{
-                size: A4;
-                margin: 20mm;
-            }}
-            body {{
-                font-family: Arial, sans-serif;
-                font-size: 13px;
-            }}
-            table, th, td {{
-                border: 1px solid #000;
-                border-collapse: collapse;
-                padding: 6px;
-            }}
-            th {{
-                background: #d9e3f0;
-            }}
-        </style>
-        </head>
-        <body>
-            {html}
-        </body>
-        </html>
-        """
+        # Step 2: Generate professional HTML
+        st.session_state["pdf_html"] = professional_html  # <-- Place the code I shared here
 
+        # Step 3: Add Generate PDF button
         if st.button("Generate PDF"):
-            try:
-                from weasyprint import HTML
-            except Exception as e:
-                st.error("WeasyPrint is not installed or failed to import. Add 'weasyprint' to requirements.txt and ensure dependencies for WeasyPrint are available.")
-                st.write(e)
-            else:
-                pdf_bytes = HTML(string=styled_html).write_pdf()
-                st.success("PDF generated successfully!")
-                st.download_button(
-                    label="⬇️ Download Job Card PDF",
-                    data=pdf_bytes,
-                    file_name=f"JobCard_{job_no}.pdf",
-                    mime="application/pdf"
-                )
+            from weasyprint import HTML
+            pdf_bytes = HTML(string=st.session_state["pdf_html"]).write_pdf()
+
+            st.success("PDF generated successfully!")
+
+            st.download_button(
+                label="⬇️ Download Job Card PDF",
+                data=pdf_bytes,
+                file_name=f"JobCard_{job_no}.pdf",
+                mime="application/pdf"
+            )
+
