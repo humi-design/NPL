@@ -276,9 +276,8 @@ def generate_jobcard_pdf(
     vendor_id, vendor_company, vendor_person, vendor_mobile, vendor_gst, vendor_address,
     job_no, job_date, dispatch_location, qr_bytes,
     items_df, materials_df, grn_df,
-    tolerance, surface_finish, hardness, thread_check
-):
-
+    tolerance, surface_finish, hardness, thread_check):
+        
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
                             rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -447,7 +446,7 @@ if qr_bytes:
     # ---------------------------------------------------
     doc.build(story, canvasmaker=NumberedCanvas)
 
-    return buffer.getvalue()
+        return buffer.getvalue()
 
 
 # -------------------------------------------------------
