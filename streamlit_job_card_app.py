@@ -321,9 +321,13 @@ def generate_jobcard_pdf(
     barcode_value = f"{job_no}-{vendor_id}"
     barcode = code128.Code128(barcode_value, barHeight=40, barWidth=1.2)
 
-    qr_img = qr.QrCodeWidget(qr_bytes)
-    qr_draw = Drawing(100, 100)
-    qr_draw.add(qr_img)
+   # ---------------- QR CODE ----------------
+if qr_bytes:
+    qr_img = Image(BytesIO(qr_bytes), width=120, height=120)
+    story.append(Paragraph("<b>QR Code</b>", label_style))
+    story.append(qr_img)
+    story.append(Spacer(1, 10))
+
 
     top_table = Table([
         [
