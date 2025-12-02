@@ -446,7 +446,7 @@ if qr_bytes:
     # ---------------------------------------------------
     doc.build(story, canvasmaker=NumberedCanvas)
 
-        return buffer.getvalue()
+return buffer.getvalue()
 
 
 # -------------------------------------------------------
