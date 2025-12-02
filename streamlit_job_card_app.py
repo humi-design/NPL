@@ -230,12 +230,15 @@ with tab2:
 # -----------------------------
 # TAB 3: PDF EXPORT (WeasyPrint)
 # -----------------------------
+# -----------------------------
+# TAB 3: PDF EXPORT (REPORTLAB)
+# -----------------------------
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.graphics.shapes import Drawing, Rect
-from reportlab.graphics.barcode import qr, code128
+from reportlab.graphics.barcode import code128
 from reportlab.pdfgen.canvas import Canvas
 import base64
 from io import BytesIO
@@ -263,9 +266,7 @@ class NumberedCanvas(Canvas):
 
     def draw_page_number(self, page_count):
         self.setFont("Helvetica", 9)
-        self.drawCentredString(
-            300, 20, f"Page {self._pageNumber} of {page_count}"
-        )
+        self.drawCentredString(300, 20, f"Page {self._pageNumber} of {page_count}")
 
 
 # -------------------------------------------------------
@@ -277,7 +278,7 @@ def generate_jobcard_pdf(
     job_no, job_date, dispatch_location, qr_bytes,
     items_df, materials_df, grn_df,
     tolerance, surface_finish, hardness, thread_check):
-        
+
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
                             rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -285,17 +286,17 @@ def generate_jobcard_pdf(
     styles = getSampleStyleSheet()
     story = []
 
+    label_style = ParagraphStyle("label_style", fontSize=12, leading=14, spaceAfter=4)
+
     # ---------------------------------------------------
-    # HEADER SECTION (Gradient + Logo With Border)
+    # HEADER SECTION (Logo + Border)
     # ---------------------------------------------------
     story.append(Spacer(1, 10))
 
-    # Logo block
     if logo_file:
         img = Image(logo_file, width=80, height=80)
         img.hAlign = "LEFT"
 
-        # Add border rectangle
         d = Drawing(100, 100)
         d.add(Rect(0, 0, 90, 90, strokeColor=colors.HexColor("#003366"), fillColor=None, strokeWidth=2))
         d.add(img)
@@ -310,7 +311,7 @@ def generate_jobcard_pdf(
         spaceAfter=10,
     )
     story.append(Paragraph(f"<b>{company_name}</b>", header_style))
-    story.append(Paragraph(f"{company_address}", styles["Normal"]))
+    story.append(Paragraph(company_address, styles["Normal"]))
 
     story.append(Spacer(1, 12))
 
@@ -320,26 +321,22 @@ def generate_jobcard_pdf(
     barcode_value = f"{job_no}-{vendor_id}"
     barcode = code128.Code128(barcode_value, barHeight=40, barWidth=1.2)
 
-   # ---------------- QR CODE ----------------
-if qr_bytes:
-    qr_img = Image(BytesIO(qr_bytes), width=120, height=120)
-    story.append(Paragraph("<b>QR Code</b>", label_style))
-    story.append(qr_img)
-    story.append(Spacer(1, 10))
+    # -- QR IMAGE FIX --
+    qr_img = None
+    if qr_bytes:
+        qr_img = Image(BytesIO(qr_bytes), width=120, height=120)
 
+    top_row = [
+        Paragraph(f"""
+            <b>Job No:</b> {job_no}<br/>
+            <b>Date:</b> {job_date}<br/>
+            <b>Dispatch:</b> {dispatch_location}
+        """, styles["Normal"]),
+        qr_img if qr_img else Paragraph("No QR", styles["Normal"]),
+        barcode
+    ]
 
-    top_table = Table([
-        [
-            Paragraph(f"""
-                <b>Job No:</b> {job_no}<br/>
-                <b>Date:</b> {job_date}<br/>
-                <b>Dispatch:</b> {dispatch_location}
-            """, styles["Normal"]),
-            qr_draw,
-            barcode,
-        ]
-    ], colWidths=[200, 120, 120])
-
+    top_table = Table([top_row], colWidths=[200, 120, 120])
     top_table.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "TOP")
     ]))
@@ -348,14 +345,14 @@ if qr_bytes:
     story.append(Spacer(1, 12))
 
     # ---------------------------------------------------
-    # SUMMARY BOX (Premium Look)
+    # SUMMARY BOX (Premium)
     # ---------------------------------------------------
     summary = Table([
         [Paragraph("<b>Quality Summary</b>", styles["Heading4"])],
         [f"Tolerance: {tolerance}"],
         [f"Surface Finish: {surface_finish}"],
         [f"Hardness: {hardness}"],
-        ["Thread Check: GO/NO-GO Required" if thread_check else "Thread: Not Applicable"]
+        ["Thread Check: GO/NO-GO Required" if thread_check else "Thread: Not Applicable"],
     ], colWidths=[450])
 
     summary.setStyle(TableStyle([
@@ -407,7 +404,7 @@ if qr_bytes:
         ("GRID", (0,0), (-1,-1), 0.5, colors.gray),
         ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
     ]))
-    story.append(materials_table)
+    story.append(material_table)
     story.append(Spacer(1, 14))
 
     # ---------------------------------------------------
@@ -446,26 +443,5 @@ if qr_bytes:
     # ---------------------------------------------------
     doc.build(story, canvasmaker=NumberedCanvas)
 
-return buffer.getvalue()
+    return buffer.getvalue()
 
-
-# -------------------------------------------------------
-# STREAMLIT DOWNLOAD BUTTON
-# -------------------------------------------------------
-if st.button("📄 Download Premium PDF"):
-    pdf_data = generate_jobcard_pdf(
-        company_name, company_address, logo_file,
-        vendor_id, vendor_company, vendor_person, vendor_mobile, vendor_gst, vendor_address,
-        job_no, job_date, dispatch_location, qr_bytes,
-        rows_to_df(st.session_state["items"], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"]),
-        rows_to_df(st.session_state["materials"], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"]),
-        rows_to_df(st.session_state["grn_entries"], ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"]),
-        tolerance, surface_finish, hardness, thread_check
-    )
-
-    st.download_button(
-        "⬇ Download Job Card PDF",
-        data=pdf_data,
-        file_name=f"JobCard_{job_no}.pdf",
-        mime="application/pdf"
-    )
