@@ -233,15 +233,20 @@ with tab2:
 # -----------------------------
 # TAB 3: PDF EXPORT (REPORTLAB)
 # -----------------------------
+# -----------------------------
+# TAB 3: PDF EXPORT (ReportLab)
+# -----------------------------
+import base64
+from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+)
 from reportlab.graphics.shapes import Drawing, Rect
-from reportlab.graphics.barcode import code128
+from reportlab.graphics.barcode import qr, code128
 from reportlab.pdfgen.canvas import Canvas
-import base64
-from io import BytesIO
 
 
 # -------------------------------------------------------
@@ -277,19 +282,19 @@ def generate_jobcard_pdf(
     vendor_id, vendor_company, vendor_person, vendor_mobile, vendor_gst, vendor_address,
     job_no, job_date, dispatch_location, qr_bytes,
     items_df, materials_df, grn_df,
-    tolerance, surface_finish, hardness, thread_check):
-
+    tolerance, surface_finish, hardness, thread_check
+):
+        
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
-                            rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+                            rightMargin=30, leftMargin=30,
+                            topMargin=30, bottomMargin=30)
 
     styles = getSampleStyleSheet()
     story = []
 
-    label_style = ParagraphStyle("label_style", fontSize=12, leading=14, spaceAfter=4)
-
     # ---------------------------------------------------
-    # HEADER SECTION (Logo + Border)
+    # HEADER (Logo + Company Info)
     # ---------------------------------------------------
     story.append(Spacer(1, 10))
 
@@ -298,7 +303,8 @@ def generate_jobcard_pdf(
         img.hAlign = "LEFT"
 
         d = Drawing(100, 100)
-        d.add(Rect(0, 0, 90, 90, strokeColor=colors.HexColor("#003366"), fillColor=None, strokeWidth=2))
+        d.add(Rect(0, 0, 90, 90, strokeColor=colors.HexColor("#003366"),
+                    fillColor=None, strokeWidth=2))
         d.add(img)
         story.append(d)
 
@@ -308,59 +314,58 @@ def generate_jobcard_pdf(
         leading=22,
         alignment=1,
         textColor=colors.HexColor("#0A284B"),
-        spaceAfter=10,
     )
+
     story.append(Paragraph(f"<b>{company_name}</b>", header_style))
     story.append(Paragraph(company_address, styles["Normal"]))
-
     story.append(Spacer(1, 12))
 
     # ---------------------------------------------------
-    # JOB DETAILS + QR + BARCODE
+    # QR CODE + BARCODE + JOB INFO
     # ---------------------------------------------------
     barcode_value = f"{job_no}-{vendor_id}"
     barcode = code128.Code128(barcode_value, barHeight=40, barWidth=1.2)
 
-    # -- QR IMAGE FIX --
     qr_img = None
     if qr_bytes:
-        qr_img = Image(BytesIO(qr_bytes), width=120, height=120)
+        qr_img = Image(BytesIO(qr_bytes), width=100, height=100)
 
     top_row = [
-        Paragraph(f"""
+        Paragraph(
+            f"""
             <b>Job No:</b> {job_no}<br/>
             <b>Date:</b> {job_date}<br/>
             <b>Dispatch:</b> {dispatch_location}
-        """, styles["Normal"]),
-        qr_img if qr_img else Paragraph("No QR", styles["Normal"]),
-        barcode
+            """,
+            styles["Normal"]
+        ),
+        qr_img if qr_img else "",
+        barcode,
     ]
 
     top_table = Table([top_row], colWidths=[200, 120, 120])
-    top_table.setStyle(TableStyle([
-        ("VALIGN", (0,0), (-1,-1), "TOP")
-    ]))
-
+    top_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story.append(top_table)
     story.append(Spacer(1, 12))
 
     # ---------------------------------------------------
-    # SUMMARY BOX (Premium)
+    # SUMMARY BOX
     # ---------------------------------------------------
     summary = Table([
         [Paragraph("<b>Quality Summary</b>", styles["Heading4"])],
         [f"Tolerance: {tolerance}"],
         [f"Surface Finish: {surface_finish}"],
         [f"Hardness: {hardness}"],
-        ["Thread Check: GO/NO-GO Required" if thread_check else "Thread: Not Applicable"],
+        ["Thread Check: GO/NO-GO Required" if thread_check else "Thread: Not Applicable"]
     ], colWidths=[450])
 
     summary.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#DCE6F2")),
-        ("BOX", (0,0), (-1,-1), 1, colors.HexColor("#003366")),
-        ("INNERGRID", (0,0), (-1,-1), 0.2, colors.gray),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold")
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DCE6F2")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#003366")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.2, colors.gray),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
     ]))
+
     story.append(summary)
     story.append(Spacer(1, 14))
 
@@ -385,10 +390,10 @@ def generate_jobcard_pdf(
     story.append(Paragraph("<b>Item Details</b>", styles["Heading4"]))
     items_table = Table([items_df.columns.tolist()] + items_df.values.tolist(), repeatRows=1)
     items_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0A284B")),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.gray),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0A284B")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
     ]))
     story.append(items_table)
     story.append(Spacer(1, 14))
@@ -399,12 +404,12 @@ def generate_jobcard_pdf(
     story.append(Paragraph("<b>Material Issued</b>", styles["Heading4"]))
     materials_table = Table([materials_df.columns.tolist()] + materials_df.values.tolist(), repeatRows=1)
     materials_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0A284B")),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.gray),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0A284B")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
     ]))
-    story.append(material_table)
+    story.append(materials_table)
     story.append(Spacer(1, 14))
 
     # ---------------------------------------------------
@@ -413,29 +418,25 @@ def generate_jobcard_pdf(
     story.append(Paragraph("<b>Goods Received / QC</b>", styles["Heading4"]))
     grn_table = Table([grn_df.columns.tolist()] + grn_df.values.tolist(), repeatRows=1)
     grn_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0A284B")),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.gray),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0A284B")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
     ]))
     story.append(grn_table)
     story.append(Spacer(1, 20))
 
     # ---------------------------------------------------
-    # SIGNATURE SECTION
+    # SIGNATURES
     # ---------------------------------------------------
     story.append(Paragraph("<b>Signatures</b>", styles["Heading4"]))
-
     sig = Table([
         ["__________________", "__________________", "__________________"],
         ["Prepared By", "QC Approved", "Vendor Sign"]
-    ], colWidths=[150,150,150])
-
+    ], colWidths=[150, 150, 150])
     sig.setStyle(TableStyle([
-        ("ALIGN", (0,0), (-1,0), "CENTER"),
-        ("ALIGN", (0,1), (-1,1), "CENTER")
+        ("ALIGN", (0, 0), (-1, 1), "CENTER")
     ]))
-
     story.append(sig)
 
     # ---------------------------------------------------
@@ -444,4 +445,28 @@ def generate_jobcard_pdf(
     doc.build(story, canvasmaker=NumberedCanvas)
 
     return buffer.getvalue()
+
+
+# -------------------------------------------------------
+# STREAMLIT - DOWNLOAD BUTTON
+# -------------------------------------------------------
+if st.button("📄 Download Premium PDF"):
+
+    pdf_data = generate_jobcard_pdf(
+        company_name, company_address, logo_file,
+        vendor_id, vendor_company, vendor_person, vendor_mobile, vendor_gst, vendor_address,
+        job_no, job_date, dispatch_location, qr_bytes,
+        rows_to_df(st.session_state["items"], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"]),
+        rows_to_df(st.session_state["materials"], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"]),
+        rows_to_df(st.session_state["grn_entries"], ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"]),
+        tolerance, surface_finish, hardness, thread_check
+    )
+
+    st.download_button(
+        label="⬇ Download Job Card PDF",
+        data=pdf_data,
+        file_name=f"JobCard_{job_no}.pdf",
+        mime="application/pdf"
+    )
+
 
