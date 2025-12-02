@@ -230,117 +230,239 @@ with tab2:
 # -----------------------------
 # TAB 3: PDF EXPORT (WeasyPrint)
 # -----------------------------
-with tab3:
-    st.markdown(f"<h1 style='color:{PRIMARY_COLOR}'>Download PDF</h1>", unsafe_allow_html=True)
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.graphics.shapes import Drawing, Rect
+from reportlab.graphics.barcode import qr, code128
+from reportlab.pdfgen.canvas import Canvas
+import base64
+from io import BytesIO
 
-    if not st.session_state['items']:
-        st.warning("Please fill the form and go to Preview tab first.")
-    else:
-        # Convert QR to base64
-        qr_b64 = base64.b64encode(qr_bytes).decode("utf-8")
 
-        # PROFESSIONAL PDF HTML
-        pdf_html = f"""
-        <div style='font-family:Arial; padding:20px; border:2px solid #ccc; border-radius:10px; background:#f8f9fb;'>
+# -------------------------------------------------------
+# PAGE NUMBERING FUNCTION
+# -------------------------------------------------------
+class NumberedCanvas(Canvas):
+    def __init__(self, *args, **kwargs):
+        Canvas.__init__(self, *args, **kwargs)
+        self._saved_page_states = []
 
-            <!-- HEADER -->
-            <div style='display:flex; align-items:center; gap:20px;'>
-                <div style='width:100px;'>
-                    {"<img src='data:image/png;base64," + base64.b64encode(logo_file.read()).decode() + "' style='width:100px;'/>" if logo_file else ""}
-                </div>
-                <div style='font-size:18px; font-weight:bold;'>
-                    {company_name}<br>
-                    <span style='font-size:14px; font-weight:normal;'>{company_address}</span>
-                </div>
-            </div>
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        Canvas.showPage(self)
 
-            <hr>
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_number(num_pages)
+            Canvas.showPage(self)
+        Canvas.save(self)
 
-            <!-- VENDOR DETAILS -->
-            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Vendor Details</h2>
-            <table style='width:100%; border-collapse: collapse;'>
-                <tr><td><b>Vendor ID</b></td><td>{vendor_id}</td></tr>
-                <tr><td><b>Company</b></td><td>{vendor_company}</td></tr>
-                <tr><td><b>Contact Person</b></td><td>{vendor_person}</td></tr>
-                <tr><td><b>Mobile</b></td><td>{vendor_mobile}</td></tr>
-                <tr><td><b>GST</b></td><td>{vendor_gst}</td></tr>
-                <tr><td><b>Address</b></td><td>{vendor_address}</td></tr>
-            </table>
+    def draw_page_number(self, page_count):
+        self.setFont("Helvetica", 9)
+        self.drawCentredString(
+            300, 20, f"Page {self._pageNumber} of {page_count}"
+        )
 
-            <hr>
 
-            <!-- JOB DETAILS -->
-            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Job Details</h2>
-            <table style='width:100%; border-collapse: collapse;'>
-                <tr><td><b>Job No</b></td><td>{job_no}</td></tr>
-                <tr><td><b>Date</b></td><td>{job_date}</td></tr>
-                <tr><td><b>Dispatch Location</b></td><td>{dispatch_location}</td></tr>
-            </table>
+# -------------------------------------------------------
+# MAIN PDF GENERATOR FUNCTION
+# -------------------------------------------------------
+def generate_jobcard_pdf(
+    company_name, company_address, logo_file,
+    vendor_id, vendor_company, vendor_person, vendor_mobile, vendor_gst, vendor_address,
+    job_no, job_date, dispatch_location, qr_bytes,
+    items_df, materials_df, grn_df,
+    tolerance, surface_finish, hardness, thread_check
+):
 
-            <br>
-            <!-- QR CODE -->
-            <h3>QR Code</h3>
-            <img src='data:image/png;base64,{qr_b64}' width='150'>
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
 
-            <hr>
+    styles = getSampleStyleSheet()
+    story = []
 
-            <!-- ITEM DETAILS -->
-            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Item Details</h2>
-            <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
-                <tr style='background:#d9e3f0;'>
-                    <th>Description</th><th>Drawing No</th><th>Drawing Link</th>
-                    <th>Grade</th><th>Qty</th><th>UOM</th>
-                </tr>
-                {"".join([f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td></tr>" for r in st.session_state['items']])}
-            </table>
+    # ---------------------------------------------------
+    # HEADER SECTION (Gradient + Logo With Border)
+    # ---------------------------------------------------
+    story.append(Spacer(1, 10))
 
-            <hr>
+    # Logo block
+    if logo_file:
+        img = Image(logo_file, width=80, height=80)
+        img.hAlign = "LEFT"
 
-            <!-- MATERIAL ISSUED -->
-            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Material Issued</h2>
-            <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
-                <tr style='background:#d9e3f0;'>
-                    <th>Raw Material</th><th>Heat No</th><th>Dia/Size</th>
-                    <th>Weight</th><th>Qty</th><th>Remark</th>
-                </tr>
-                {"".join([f"<tr><td>{m[0]}</td><td>{m[1]}</td><td>{m[2]}</td><td>{m[3]}</td><td>{m[4]}</td><td>{m[5]}</td></tr>" for m in st.session_state['materials']])}
-            </table>
+        # Add border rectangle
+        d = Drawing(100, 100)
+        d.add(Rect(0, 0, 90, 90, strokeColor=colors.HexColor("#003366"), fillColor=None, strokeWidth=2))
+        d.add(img)
+        story.append(d)
 
-            <hr>
+    header_style = ParagraphStyle(
+        "header",
+        fontSize=18,
+        leading=22,
+        alignment=1,
+        textColor=colors.HexColor("#0A284B"),
+        spaceAfter=10,
+    )
+    story.append(Paragraph(f"<b>{company_name}</b>", header_style))
+    story.append(Paragraph(f"{company_address}", styles["Normal"]))
 
-            <!-- OPERATIONS -->
-            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Operations</h2>
-            <p>{", ".join([op for op, sel in op_selected.items() if sel]) or "None"}</p>
+    story.append(Spacer(1, 12))
 
-            {"<h2 style='color:"+PRIMARY_COLOR+";'>Machine Details</h2>" if show_machine else ""}
-            {"".join([f"<p><b>{k}:</b> {v}</p>" for k,v in machine_details.items()]) if show_machine else ""}
+    # ---------------------------------------------------
+    # JOB DETAILS + QR + BARCODE
+    # ---------------------------------------------------
+    barcode_value = f"{job_no}-{vendor_id}"
+    barcode = code128.Code128(barcode_value, barHeight=40, barWidth=1.2)
 
-            <hr>
+    qr_img = qr.QrCodeWidget(qr_bytes)
+    qr_draw = Drawing(100, 100)
+    qr_draw.add(qr_img)
 
-            <!-- QUALITY -->
-            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Quality Instructions</h2>
-            <p><b>Tolerance:</b> {tolerance}</p>
-            <p><b>Surface Finish:</b> {surface_finish}</p>
-            <p><b>Hardness:</b> {hardness}</p>
-            {"<p><b>Thread:</b> GO/NO-GO Required</p>" if thread_check else ""}
+    top_table = Table([
+        [
+            Paragraph(f"""
+                <b>Job No:</b> {job_no}<br/>
+                <b>Date:</b> {job_date}<br/>
+                <b>Dispatch:</b> {dispatch_location}
+            """, styles["Normal"]),
+            qr_draw,
+            barcode,
+        ]
+    ], colWidths=[200, 120, 120])
 
-            <hr>
+    top_table.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "TOP")
+    ]))
 
-            <!-- GOODS RECEIVED -->
-            <h2 style='color:{PRIMARY_COLOR}; margin-bottom:5px;'>Goods Received / QC</h2>
-            <table style='width:100%; border:1px solid #000; border-collapse:collapse;'>
-                <tr style='background:#d9e3f0;'>
-                    <th>Date</th><th>Qty Received</th><th>OK Qty</th>
-                    <th>Rejected Qty</th><th>Remarks</th><th>QC Approved By</th>
-                </tr>
-                {"".join([f"<tr><td>{g[0]}</td><td>{g[1]}</td><td>{g[2]}</td><td>{g[3]}</td><td>{g[4]}</td><td>{g[5]}</td></tr>" for g in st.session_state['grn_entries']])}
-            </table>
+    story.append(top_table)
+    story.append(Spacer(1, 12))
 
-        </div>
-        """
+    # ---------------------------------------------------
+    # SUMMARY BOX (Premium Look)
+    # ---------------------------------------------------
+    summary = Table([
+        [Paragraph("<b>Quality Summary</b>", styles["Heading4"])],
+        [f"Tolerance: {tolerance}"],
+        [f"Surface Finish: {surface_finish}"],
+        [f"Hardness: {hardness}"],
+        ["Thread Check: GO/NO-GO Required" if thread_check else "Thread: Not Applicable"]
+    ], colWidths=[450])
 
-        # Step 3: Generate PDF using WeasyPrint
-        if st.button("Generate PDF"):
-            from weasyprint import HTML
-            pdf_bytes = HTML(string=pdf_html).write_pdf()
-            st.download_button("⬇️ Download Job Card PDF", pdf_bytes, file_name=f"JobCard_{job_no}.pdf", mime="application/pdf")
+    summary.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#DCE6F2")),
+        ("BOX", (0,0), (-1,-1), 1, colors.HexColor("#003366")),
+        ("INNERGRID", (0,0), (-1,-1), 0.2, colors.gray),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold")
+    ]))
+    story.append(summary)
+    story.append(Spacer(1, 14))
+
+    # ---------------------------------------------------
+    # VENDOR DETAILS
+    # ---------------------------------------------------
+    story.append(Paragraph("<b>Vendor Details</b>", styles["Heading4"]))
+    vendor_html = f"""
+        <b>ID:</b> {vendor_id}<br/>
+        <b>Company:</b> {vendor_company}<br/>
+        <b>Contact Person:</b> {vendor_person}<br/>
+        <b>Mobile:</b> {vendor_mobile}<br/>
+        <b>GST:</b> {vendor_gst}<br/>
+        <b>Address:</b> {vendor_address}<br/>
+    """
+    story.append(Paragraph(vendor_html, styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    # ---------------------------------------------------
+    # ITEMS TABLE
+    # ---------------------------------------------------
+    story.append(Paragraph("<b>Item Details</b>", styles["Heading4"]))
+    items_table = Table([items_df.columns.tolist()] + items_df.values.tolist(), repeatRows=1)
+    items_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0A284B")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.gray),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 14))
+
+    # ---------------------------------------------------
+    # MATERIAL TABLE
+    # ---------------------------------------------------
+    story.append(Paragraph("<b>Material Issued</b>", styles["Heading4"]))
+    materials_table = Table([materials_df.columns.tolist()] + materials_df.values.tolist(), repeatRows=1)
+    materials_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0A284B")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.gray),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+    ]))
+    story.append(materials_table)
+    story.append(Spacer(1, 14))
+
+    # ---------------------------------------------------
+    # GRN TABLE
+    # ---------------------------------------------------
+    story.append(Paragraph("<b>Goods Received / QC</b>", styles["Heading4"]))
+    grn_table = Table([grn_df.columns.tolist()] + grn_df.values.tolist(), repeatRows=1)
+    grn_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0A284B")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.gray),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+    ]))
+    story.append(grn_table)
+    story.append(Spacer(1, 20))
+
+    # ---------------------------------------------------
+    # SIGNATURE SECTION
+    # ---------------------------------------------------
+    story.append(Paragraph("<b>Signatures</b>", styles["Heading4"]))
+
+    sig = Table([
+        ["__________________", "__________________", "__________________"],
+        ["Prepared By", "QC Approved", "Vendor Sign"]
+    ], colWidths=[150,150,150])
+
+    sig.setStyle(TableStyle([
+        ("ALIGN", (0,0), (-1,0), "CENTER"),
+        ("ALIGN", (0,1), (-1,1), "CENTER")
+    ]))
+
+    story.append(sig)
+
+    # ---------------------------------------------------
+    # BUILD PDF
+    # ---------------------------------------------------
+    doc.build(story, canvasmaker=NumberedCanvas)
+
+    return buffer.getvalue()
+
+
+# -------------------------------------------------------
+# STREAMLIT DOWNLOAD BUTTON
+# -------------------------------------------------------
+if st.button("📄 Download Premium PDF"):
+    pdf_data = generate_jobcard_pdf(
+        company_name, company_address, logo_file,
+        vendor_id, vendor_company, vendor_person, vendor_mobile, vendor_gst, vendor_address,
+        job_no, job_date, dispatch_location, qr_bytes,
+        rows_to_df(st.session_state["items"], ["Description","Drawing No","Drawing Link","Grade","Qty","UOM"]),
+        rows_to_df(st.session_state["materials"], ["Raw Material","Heat No","Dia/Size","Weight","Qty","Remark"]),
+        rows_to_df(st.session_state["grn_entries"], ["Date","Qty Received","OK Qty","Rejected Qty","Remarks","QC Approved By"]),
+        tolerance, surface_finish, hardness, thread_check
+    )
+
+    st.download_button(
+        "⬇ Download Job Card PDF",
+        data=pdf_data,
+        file_name=f"JobCard_{job_no}.pdf",
+        mime="application/pdf"
+    )
