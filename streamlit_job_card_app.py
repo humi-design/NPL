@@ -1,24 +1,26 @@
 import streamlit as st
 import psycopg2
-import base64
 from io import BytesIO
 from datetime import date
 from reportlab.platypus import *
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-# -----------------------------
-# CONFIG
-# -----------------------------
-st.set_page_config(page_title="Factory Job Card System",
-                   page_icon="🏭",
-                   layout="wide")
+# ----------------------------------
+# PAGE CONFIG
+# ----------------------------------
+st.set_page_config(
+    page_title="Factory Job Card System",
+    page_icon="🏭",
+    layout="wide"
+)
 
+# ----------------------------------
+# DATABASE CONNECTION
+# ----------------------------------
 DB_URL = "postgresql://postgres:Ralpana09876@db.ibfqpjpvyxnvditlaayg.supabase.co:5432/postgres?sslmode=require"
 
-# -----------------------------
-# DB CONNECTION
-# -----------------------------
 @st.cache_resource
 def get_conn():
     return psycopg2.connect(DB_URL)
@@ -26,38 +28,40 @@ def get_conn():
 conn = get_conn()
 cur = conn.cursor()
 
-# -----------------------------
-# PREMIUM CSS
-# -----------------------------
+# ----------------------------------
+# PREMIUM UI CSS
+# ----------------------------------
 st.markdown("""
 <style>
-.main {
+.stApp {
     background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
     color: white;
+}
+.block-container {
+    padding-top: 2rem;
+}
+.card {
+    background: rgba(255,255,255,0.06);
+    padding: 25px;
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 25px rgba(0,0,0,0.5);
 }
 .stButton>button {
     background: linear-gradient(90deg,#00c6ff,#0072ff);
     color: white;
-    border-radius: 8px;
+    border-radius: 10px;
     font-weight: bold;
-}
-.card {
-    background: rgba(255,255,255,0.05);
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.4);
+    padding: 10px 20px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
-# HEADER
-# -----------------------------
 st.title("🏭 Factory Vendor Job Card System")
 
-# -----------------------------
-# COMPANY PROFILE
-# -----------------------------
+# =========================================================
+# 🏢 COMPANY PROFILE
+# =========================================================
 st.header("🏢 Company Profile")
 
 cur.execute("SELECT * FROM company_profile LIMIT 1")
@@ -66,19 +70,18 @@ company = cur.fetchone()
 if not company:
     name = st.text_input("Company Name")
     address = st.text_area("Address")
-    logo = st.file_uploader("Upload Logo")
+    logo = st.file_uploader("Upload Logo", type=["png","jpg","jpeg"])
 
     if st.button("Save Company Profile"):
-        logo_bytes = logo.read() if logo else None
-        cur.execute(
-            "INSERT INTO company_profile (company_name,address,logo) VALUES (%s,%s,%s)",
-            (name, address, logo_bytes)
-        )
-        conn.commit()
-        st.success("Saved! Reload page.")
+        if name:
+            logo_bytes = logo.read() if logo else None
+            cur.execute(
+                "INSERT INTO company_profile (company_name,address,logo) VALUES (%s,%s,%s)",
+                (name, address, logo_bytes)
+            )
+            conn.commit()
+            st.success("Company Profile Saved — Reload Page")
 else:
-    st.success("Company Profile Loaded")
-
     col1, col2 = st.columns([1,4])
 
     with col1:
@@ -89,9 +92,9 @@ else:
         st.subheader(company[1])
         st.write(company[2])
 
-# -----------------------------
-# VENDOR MASTER
-# -----------------------------
+# =========================================================
+# 👥 VENDOR MASTER
+# =========================================================
 st.header("👥 Vendor Master")
 
 cur.execute("SELECT vendor_id, company_name FROM vendors ORDER BY company_name")
@@ -118,11 +121,11 @@ if choice == "Add New":
         st.success("Vendor Saved")
 else:
     vid = choice.split("(")[-1].replace(")", "")
-    st.info(f"Selected Vendor ID: {vid}")
+    st.success(f"Selected Vendor ID: {vid}")
 
-# -----------------------------
-# JOB CARD
-# -----------------------------
+# =========================================================
+# 📋 JOB CARD
+# =========================================================
 st.header("📋 Create Job Card")
 
 job_no = st.text_input("Job No", f"JC-{date.today().strftime('%Y%m%d')}")
@@ -142,31 +145,62 @@ if st.button("💾 Save Job Card"):
          thread, delivery)
     )
     conn.commit()
-    st.success("Job Card Saved")
+    st.success("Job Card Saved Successfully")
 
-# -----------------------------
-# AMAZING PDF GENERATOR
-# -----------------------------
+# =========================================================
+# 📄 PREMIUM PDF GENERATOR
+# =========================================================
 def create_pdf(job_no):
-    buffer = BytesIO()
 
+    buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
     story = []
+
+    # Fetch company info
+    cur.execute("SELECT * FROM company_profile LIMIT 1")
+    comp = cur.fetchone()
 
     title_style = ParagraphStyle(
         "title",
-        fontSize=20,
+        fontSize=22,
         alignment=1,
-        textColor=colors.HexColor("#003366")
+        textColor=colors.HexColor("#003366"),
+        spaceAfter=20
     )
 
     story.append(Paragraph("JOB CARD", title_style))
-    story.append(Spacer(1, 20))
 
-    story.append(Paragraph(f"<b>Job No:</b> {job_no}", getSampleStyleSheet()["Normal"]))
-    story.append(Paragraph(f"<b>Date:</b> {job_date}", getSampleStyleSheet()["Normal"]))
-    story.append(Paragraph(f"<b>Vendor ID:</b> {vid}", getSampleStyleSheet()["Normal"]))
-    story.append(Paragraph(f"<b>Dispatch:</b> {dispatch}", getSampleStyleSheet()["Normal"]))
+    if comp:
+        story.append(Paragraph(f"<b>{comp[1]}</b>", styles["Title"]))
+        story.append(Paragraph(comp[2], styles["Normal"]))
+        story.append(Spacer(1,20))
+
+    # Fetch job info
+    cur.execute("SELECT * FROM job_cards WHERE job_no=%s", (job_no,))
+    job = cur.fetchone()
+
+    if job:
+        data = [
+            ["Job No", job[0]],
+            ["Vendor ID", job[1]],
+            ["Date", str(job[2])],
+            ["Dispatch", job[3]],
+            ["Tolerance", job[4]],
+            ["Finish", job[5]],
+            ["Hardness", job[6]],
+            ["Thread", "YES" if job[7] else "NO"],
+            ["Delivery", str(job[8])]
+        ]
+
+        table = Table(data, hAlign='LEFT')
+        table.setStyle(TableStyle([
+            ("GRID",(0,0),(-1,-1),1,colors.grey),
+            ("BACKGROUND",(0,0),(-1,0),colors.lightblue),
+            ("FONTSIZE",(0,0),(-1,-1),11)
+        ]))
+
+        story.append(table)
 
     doc.build(story)
     return buffer.getvalue()
