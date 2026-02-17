@@ -14,7 +14,7 @@ st.set_page_config(page_title="Factory Job Card System",
                    page_icon="🏭",
                    layout="wide")
 
-DB_URL = "postgresql://postgres:Ralpana0987@db.ibfqpjpvyxnvditlaayg.supabase.co:5432/postgres"
+DB_URL = "postgresql://postgres:Ralpana09876@db.ibfqpjpvyxnvditlaayg.supabase.co:5432/postgres?sslmode=require"
 
 # -----------------------------
 # DB CONNECTION
