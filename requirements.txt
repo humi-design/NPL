@@ -7,4 +7,4 @@ reportlab
 openpyxl
 python-barcode
 pdfkit
-
+psycopg2-binary
