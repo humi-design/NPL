@@ -23,7 +23,15 @@ DB_URL = "postgresql://postgres:Ralpana09876@db.ibfqpjpvyxnvditlaayg.supabase.co
 
 @st.cache_resource
 def get_conn():
-    return psycopg2.connect(DB_URL)
+    return psycopg2.connect(
+        host="db.ibfqpjpvyxnvditlaayg.supabase.co",
+        port=5432,
+        database="postgres",
+        user="postgres",
+        password="Ralpana09876",
+        sslmode="require",
+        connect_timeout=10
+    )
 
 conn = get_conn()
 cur = conn.cursor()
