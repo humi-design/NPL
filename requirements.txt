@@ -1,10 +1,29 @@
-# requirements.txt
-streamlit
-pandas
-pillow
-qrcode
-reportlab
-openpyxl
-python-barcode
-pdfkit
-psycopg2-binary
+# requirements.txt - Job Card Pro System
+
+# Web Framework
+streamlit>=1.28.0
+
+# Database
+mysql-connector-python>=8.2.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Image Processing
+pillow>=10.0.0
+qrcode>=7.4.0
+
+# PDF Generation
+reportlab>=4.0.0
+fpdf2>=2.7.0
+
+# Excel Support
+openpyxl>=3.1.0
+
+# UI Enhancements
+streamlit-option-menu>=0.3.6
+streamlit-extras>=0.1.0
+
+# Additional Utilities
+python-dateutil>=2.8.0
